@@ -4,10 +4,10 @@ import google.generativeai as genai
 # 1. # Look for the key in the Cloud Secrets instead of local text
 GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # 2. Page UI
-st.title("🎓 Stature Tutors")
+st.title("Stature Tutors")
 st.caption("I'm your Socratic tutor. I won't give you the answer, but I'll help you find it!")
 
 # 3. Chat Logic
