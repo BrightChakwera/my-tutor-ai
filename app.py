@@ -80,9 +80,8 @@ if selected_course in active_courses:
             "Set Your Challenge Level:",
             options=["Foundational", "Intermediate", "Advanced"]
         )
-        
+        st.divider(f"Current Level: **{difficulty}**")
         st.divider() # Adds a nice clean line
-        st.write(f"Current Level: **{difficulty}**")
 
         # --- 2. INITIALIZE QUIZ STATE ---
         if "quiz_questions" not in st.session_state:
@@ -196,4 +195,5 @@ st.markdown(
     unsafe_allow_html=True
 
 )
+
 
