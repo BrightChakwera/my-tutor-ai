@@ -90,7 +90,7 @@ if selected_course in active_courses:
             st.session_state.answered = False 
 
         # 2. GENERATE / RESTART LOGIC
-        if st.button("🚀 Generate New 7-Question Set") or (not st.session_state.quiz_set and not st.session_state.quiz_complete):
+        if st.button("🚀 Generate New 7-Question Set"):
             with st.spinner("Drafting...will be ready in seconds"):
                 json_prompt = (
                     f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
@@ -99,12 +99,19 @@ if selected_course in active_courses:
                 )
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                
+                # Update the state with new data
                 st.session_state.quiz_set = json.loads(clean_json)
                 st.session_state.current_idx = 0
                 st.session_state.score = 0
                 st.session_state.quiz_complete = False
                 st.session_state.answered = False
                 st.rerun()
+
+        # Add a friendly message if the hall is empty
+        if not st.session_state.quiz_set and not st.session_state.quiz_complete:
+            st.write("---")
+            st.info("The Exam Hall is currently quiet. Adjust your difficulty above and tap the button to begin your assessment.")
 
         # 3. QUIZ INTERFACE
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
@@ -230,4 +237,5 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
 
