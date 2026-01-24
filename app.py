@@ -4,7 +4,7 @@ import json
 
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-#Defining the model
+# Defining the model
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 # 2. SIDEBAR: The Course Menu
@@ -23,7 +23,7 @@ course_list = [
 ]
 selected_course = st.sidebar.selectbox("Choose a Course:", course_list)
 
-# --- NEW: MODULE SELECTOR LOGIC ---
+# --- MODULE SELECTOR LOGIC ---
 selected_module = None
 if selected_course == "Elementary Calculus":
     modules = ["Unit 1: Limits & Continuity", "Unit 2: Derivatives", "Unit 3: Integration"]
@@ -36,7 +36,6 @@ elif selected_course == "Elementary Macroeconomics":
 elif selected_course == "Elementary Microeconomics":
     modules = ["Unit 1: Supply & Demand", "Unit 2: Elasticity", "Unit 3: Market Structures"]
     selected_module = st.sidebar.radio("Course Curriculum:", modules)
-# ----------------------------------
 
 # 3. ROUTING: Active vs. Upcoming Courses
 active_courses = ["Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"]
@@ -54,122 +53,101 @@ if selected_course in active_courses:
         
         # DYNAMIC CONTENT SWITCHER
         if selected_module == "Unit 1: Limits & Continuity":
-            st.video("https://youtu.be/REEAJ_T8v7U") # Example Limits Video
+            st.video("https://youtu.be/REEAJ_T8v7U") 
             st.write("Welcome to Limits. We are exploring how functions behave as they approach a specific point.")
         
         elif selected_module == "Unit 2: Derivatives":
-            st.video("https://youtu.be/ANyVpMS3HL4") # Example Derivatives Video
+            st.video("https://youtu.be/ANyVpMS3HL4") 
             st.write("In this unit, we master the Power Rule and the concept of instantaneous rate of change.")
 
         elif selected_module == "Unit 1: GDP & Growth":
-            st.video("https://youtu.be/yUiU_xrpP-c") # Example GDP Video
+            st.video("https://youtu.be/yUiU_xrpP-c") 
             st.write("Learn how nations measure wealth and the difference between Real and Nominal GDP.")
 
         elif selected_module == "Unit 2: Elasticity":
-            st.video("https://youtu.be/HHcblIxiAAk") # Example Elasticity Video
+            st.video("https://youtu.be/HHcblIxiAAk") 
             st.write("We are analyzing how sensitive consumers are to price changes.")
 
         else:
-            # Default video if module isn't specifically mapped yet
             st.video("https://youtu.be/i_bn4E9EK_Q?si=576fE6mF7isaCkQT")
             st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
 
-# --- TAB 2: THE EXAM HALL ---
+    # --- TAB 2: THE EXAM HALL ---
     with tab2:
-    st.subheader("📝 Adaptive Exam Hall")
-    
-    # 1. Difficulty Slider (Main Area)
-    difficulty = st.select_slider(
-        "Set Your Challenge Level:",
-        options=["Foundational", "Intermediate", "Advanced"],
-        key="exam_diff"
-    )
+        st.subheader("📝 Adaptive Exam Hall")
+        difficulty = st.select_slider(
+            "Set Your Challenge Level:",
+            options=["Foundational", "Intermediate", "Advanced"],
+            key="exam_diff"
+        )
 
-    # 2. State Initialization
-    if "quiz_set" not in st.session_state:
-        st.session_state.quiz_set = []
-        st.session_state.current_idx = 0
-        st.session_state.quiz_complete = False
-        st.session_state.last_feedback = ""
-
-    # 3. AI Question Generation (Structured)
-    if st.button("🚀 Generate 7-Question Set"):
-        with st.spinner("Professor AI is drafting your exam..."):
-            # We tell Gemini to give us JSON format
-            json_prompt = (
-                f"Act as a university professor for {selected_course}. "
-                f"Generate 7 MCQs on {selected_module} at {difficulty} level. "
-                "Output ONLY a JSON list of objects with these keys: "
-                "'question', 'options' (a list of 4), and 'answer' (the exact string from options)."
-            )
-            response = model.generate_content(json_prompt)
-            
-            # Clean the response and parse it
-            # We strip any markdown code blocks the AI might add
-            clean_json = response.text.replace("```json", "").replace("```", "").strip()
-            st.session_state.quiz_set = json.loads(clean_json)
+        if "quiz_set" not in st.session_state:
+            st.session_state.quiz_set = []
             st.session_state.current_idx = 0
             st.session_state.quiz_complete = False
-            st.rerun()
 
-    # 4. Displaying the Structured Quiz
-    if st.session_state.quiz_set and not st.session_state.quiz_complete:
-        q_data = st.session_state.quiz_set[st.session_state.current_idx]
-        
-        st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
-        st.info(q_data["question"])
-        
-        # REAL BUTTONS (Radio)
-        user_choice = st.radio("Choose the best answer:", q_data["options"], key=f"q_{st.session_state.current_idx}")
+        if st.button("🚀 Generate 7-Question Set"):
+            with st.spinner("Professor AI is drafting your exam..."):
+                json_prompt = (
+                    f"Act as a university professor for {selected_course}. "
+                    f"Generate 7 MCQs on {selected_module} at {difficulty} level. "
+                    "Output ONLY a JSON list of objects with these keys: "
+                    "'question', 'options' (a list of 4), and 'answer' (the exact string from options)."
+                )
+                response = model.generate_content(json_prompt)
+                clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                st.session_state.quiz_set = json.loads(clean_json)
+                st.session_state.current_idx = 0
+                st.session_state.quiz_complete = False
+                st.rerun()
 
-        if st.button("Submit Answer"):
-            if user_choice == q_data["answer"]:
-                st.success("Correct!")
-                st.session_state.last_feedback = "Correct"
-            else:
-                st.error(f"Incorrect. The target was: {q_data['answer']}")
-                # THE BRIDGE: Save the failure for Tab 3
-                st.session_state.failed_concept = {
-                    "question": q_data["question"],
-                    "wrong_ans": user_choice,
-                    "right_ans": q_data["answer"]
-                }
+        if st.session_state.quiz_set and not st.session_state.quiz_complete:
+            q_data = st.session_state.quiz_set[st.session_state.current_idx]
+            st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
+            st.info(q_data["question"])
             
-            # Move to next
-            if st.session_state.current_idx < 6:
-                st.session_state.current_idx += 1
-                st.rerun()
-            else:
-                st.session_state.quiz_complete = True
+            user_choice = st.radio("Choose the best answer:", q_data["options"], key=f"q_{st.session_state.current_idx}")
+
+            if st.button("Submit Answer"):
+                if user_choice == q_data["answer"]:
+                    st.success("Correct!")
+                else:
+                    st.error(f"Incorrect. The target was: {q_data['answer']}")
+                    st.session_state.failed_concept = {
+                        "question": q_data["question"],
+                        "wrong_ans": user_choice,
+                        "right_ans": q_data["answer"]
+                    }
+                
+                if st.session_state.current_idx < 6:
+                    st.session_state.current_idx += 1
+                    st.rerun()
+                else:
+                    st.session_state.quiz_complete = True
+                    st.rerun()
+
+        elif st.session_state.quiz_complete:
+            st.success("🏁 Exam Complete!")
+            if st.button("Restart Quiz"):
+                st.session_state.quiz_set = []
+                st.session_state.quiz_complete = False
                 st.rerun()
 
-    elif st.session_state.quiz_complete:
-        st.success("🏁 Exam Complete!")
-        if st.button("Restart"):
-            st.session_state.quiz_set = []
-            st.rerun()
-
-# --- TAB 3: THE SOCRATIC TUTOR ---
+    # --- TAB 3: THE SOCRATIC TUTOR ---
     with tab3:
-    st.subheader("🎓 Socratic Assistant")
-    
-    # Check if a student just came from a failed quiz question
-    if "failed_concept" in st.session_state:
-        st.warning("⚠️ Logic Gap Detected")
-        st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
-        if st.button("Coach me on this"):
-            # Pre-load the chat with the failure context
-            context_prompt = f"The student just missed a quiz question. They thought the answer was {st.session_state.failed_concept['wrong_ans']} but it was {st.session_state.failed_concept['right_ans']}. Don't give the answer, ask a guiding question to fix their logic."
-            st.session_state.messages.append({"role": "user", "content": context_prompt})
-            del st.session_state.failed_concept # Clear the notification
-            st.rerun()
-
-    # --- YOUR EXISTING CHAT UI CODE GOES HERE ---
-        # 3. Chat Logic
-        model = genai.GenerativeModel('gemini-1.5-flash') # Updated to a stable model version
-
+        st.subheader("🎓 Socratic Assistant")
+        
         if "messages" not in st.session_state:
             st.session_state.messages = []
+
+        if "failed_concept" in st.session_state:
+            st.warning("⚠️ Logic Gap Detected")
+            st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
+            if st.button("Coach me on this"):
+                context_prompt = f"The student just missed a quiz question. They thought the answer was {st.session_state.failed_concept['wrong_ans']} but it was {st.session_state.failed_concept['right_ans']}. Don't give the answer, ask a guiding question to fix their logic."
+                st.session_state.messages.append({"role": "user", "content": context_prompt})
+                del st.session_state.failed_concept
+                st.rerun()
 
         for msg in st.session_state.messages:
             st.chat_message(msg["role"]).write(msg["content"])
@@ -178,7 +156,6 @@ if selected_course in active_courses:
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
 
-            # Socratic Prompting with Course Context
             full_prompt = (
                 f"System: You are a Socratic University Tutor for the course {selected_course}, specifically teaching {selected_module}. "
                 "Never give answers immediately. Always ask a helpful guiding question first. \n"
@@ -190,7 +167,6 @@ if selected_course in active_courses:
             st.chat_message("assistant").write(response.text)
 
 else:
-    # Landing page for courses not yet built
     st.title(selected_course)
     st.warning("🚀 This course is launching soon!")
     st.write("We are currently organizing the curriculum for this subject. Check back next week!")
@@ -205,12 +181,4 @@ st.markdown(
     </div>
     """, 
     unsafe_allow_html=True
-
 )
-
-
-
-
-
-
-
