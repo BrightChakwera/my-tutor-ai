@@ -90,7 +90,7 @@ if selected_course in active_courses:
             st.session_state.answered = False 
 
         # 2. GENERATE / RESTART LOGIC
-        if st.button("🚀 Generate New 7-Question Set"):
+        if st.button("Generate New 7-Question Set"):
             with st.spinner("Drafting...will be ready in seconds!"):
                 # ENHANCED PROMPT for exact string matching
                 json_prompt = (
@@ -244,3 +244,4 @@ st.markdown(
     """, 
     unsafe_allow_html=True
                 )
+
