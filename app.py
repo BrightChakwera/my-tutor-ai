@@ -94,4 +94,139 @@ if selected_course in active_courses:
             with st.spinner("Drafting...will be ready in seconds"):
                 json_prompt = (
                     f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
-                    "Include a 'brief_explanation' (max
+                    "Include a 'brief_explanation' (max 15 words) for the correct answer. "
+                    "Output ONLY a JSON list: [{'question': '...', 'options': ['A','B','C','D'], 'answer': '...', 'explanation': '...'}]"
+                )
+                response = model.generate_content(json_prompt)
+                clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                st.session_state.quiz_set = json.loads(clean_json)
+                st.session_state.current_idx = 0
+                st.session_state.score = 0
+                st.session_state.quiz_complete = False
+                st.session_state.answered = False
+                st.rerun()
+
+        # 3. QUIZ INTERFACE
+        if st.session_state.quiz_set and not st.session_state.quiz_complete:
+            q_data = st.session_state.quiz_set[st.session_state.current_idx]
+            st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
+            st.info(q_data["question"])
+            
+            user_choice = st.radio(
+                "Select your answer:", 
+                q_data["options"], 
+                key=f"q_{st.session_state.current_idx}",
+                disabled=st.session_state.answered
+            )
+
+            if not st.session_state.answered:
+                if st.button("Check Answer"):
+                    st.session_state.answered = True
+                    st.rerun()
+            
+            # --- COLOR FEEDBACK SECTION ---
+            if st.session_state.answered:
+                if user_choice == q_data["answer"]:
+                    st.success(f"✅ **Correct!** {q_data['explanation']}")
+                    if f"scored_{st.session_state.current_idx}" not in st.session_state:
+                        st.session_state.score += 1
+                        st.session_state[f"scored_{st.session_state.current_idx}"] = True
+                else:
+                    st.error(f"❌ **Incorrect.** You chose {user_choice}.")
+                    st.success(f"💡 **The right answer was: {q_data['answer']}** \n\n {q_data['explanation']}")
+                    st.session_state.failed_concept = {
+                        "question": q_data["question"],
+                        "wrong_ans": user_choice,
+                        "right_ans": q_data["answer"]
+                    }
+
+                if st.button("Next Question ➡️"):
+                    if st.session_state.current_idx < 6:
+                        st.session_state.current_idx += 1
+                        st.session_state.answered = False
+                        st.rerun()
+                    else:
+                        st.session_state.quiz_complete = True
+                        st.rerun()
+
+        # 4. FINAL RESULTS
+        elif st.session_state.quiz_complete:
+            percent = (st.session_state.score / 7) * 100
+            
+            if percent == 100:
+                st.balloons()
+                st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
+            elif percent >= 70:
+                st.snow()
+                st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
+            else:
+                st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Correct", f"{st.session_state.score}")
+            col2.metric("Accuracy", f"{int(percent)}%")
+            col3.metric("Level", difficulty)
+
+            st.markdown("---")
+            st.write("### What's next?")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🔄 Restart with New Questions"):
+                    # Clear session state keys related to the old quiz
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("q_") or key.startswith("scored_"):
+                            del st.session_state[key]
+                    st.session_state.quiz_set = []
+                    st.session_state.quiz_complete = False
+                    st.rerun()
+            with c2:
+                st.write("Need help with missed concepts? Head to the **Socratic Tutor** tab!")
+                
+    # --- TAB 3: THE SOCRATIC TUTOR ---
+    with tab3:
+        st.subheader("🎓 Socratic Assistant")
+        
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        if "failed_concept" in st.session_state:
+            st.warning("⚠️ Logic Gap Detected")
+            st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
+            if st.button("Coach me on this"):
+                context_prompt = f"The student just missed a quiz question. They thought the answer was {st.session_state.failed_concept['wrong_ans']} but it was {st.session_state.failed_concept['right_ans']}. Don't give the answer, ask a guiding question to fix their logic."
+                st.session_state.messages.append({"role": "user", "content": context_prompt})
+                del st.session_state.failed_concept
+                st.rerun()
+
+        for msg in st.session_state.messages:
+            st.chat_message(msg["role"]).write(msg["content"])
+
+        if prompt := st.chat_input():
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+
+            full_prompt = (
+                f"System: You are a Socratic University Tutor for the course {selected_course}, specifically teaching {selected_module}. "
+                "Never give answers immediately. Always ask a helpful guiding question first. \n"
+                f"Student: {prompt}"
+            )
+            
+            response = model.generate_content(full_prompt)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.chat_message("assistant").write(response.text)
+else:
+    st.title(selected_course)
+    st.warning("🚀 This course is launching soon!")
+    st.write("We are currently organizing the curriculum for this subject. Check back next week!")
+
+# --- FOOTER SECTION ---
+st.markdown("---") 
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <p style="color: gray;">© 2026 Radar Grad-Tutors | Precision Learning for University Students</p>
+        <p> <i>"Detecting Gaps, Delivering Grades"</i></p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
