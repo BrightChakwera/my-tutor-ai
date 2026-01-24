@@ -154,17 +154,38 @@ if selected_course in active_courses:
 
         # 4. FINAL RESULTS
         elif st.session_state.quiz_complete:
+        # Calculate percentage
+        percent = (st.session_state.score / 7) * 100
+        
+        # 1. Visual Celebration based on score
+        if percent == 100:
             st.balloons()
-            st.success(f"🏁 **Exam Complete! Your Radar Score: {st.session_state.score} / 7**")
-            
+            st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
+        elif percent >= 70:
+            st.snow()
+            st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
+        else:
+            st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
+
+        # 2. Metric Display
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Correct", f"{st.session_state.score}")
+        col2.metric("Accuracy", f"{int(percent)}%")
+        col3.metric("Level", difficulty)
+
+        # 3. Next Steps
+        st.markdown("---")
+        st.write("### What's next?")
+        c1, c2 = st.columns(2)
+        with c1:
             if st.button("🔄 Restart with New Questions"):
-                # Clear everything to force fresh generation
-                for key in list(st.session_state.keys()):
-                    if key.startswith("q_") or key.startswith("scored_"):
-                        del st.session_state[key]
+                # (Existing restart logic here...)
                 st.session_state.quiz_set = []
                 st.session_state.quiz_complete = False
                 st.rerun()
+        with c2:
+            st.write("Need help with missed concepts? Head to the **Socratic Tutor** tab!")
+                
     # --- TAB 3: THE SOCRATIC TUTOR ---
     with tab3:
         st.subheader("🎓 Socratic Assistant")
@@ -197,7 +218,6 @@ if selected_course in active_courses:
             response = model.generate_content(full_prompt)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             st.chat_message("assistant").write(response.text)
-
 else:
     st.title(selected_course)
     st.warning("🚀 This course is launching soon!")
@@ -214,6 +234,7 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
 
 
 
