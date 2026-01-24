@@ -2,6 +2,11 @@ import streamlit as st
 import google.generativeai as genai
 import json
 
+# Add this temporarily to see your options in the terminal
+for m in genai.list_models():
+  if 'generateContent' in m.supported_generation_methods:
+    print(m.name)
+
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 # Defining the model
@@ -182,5 +187,6 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
 
 
