@@ -74,8 +74,6 @@ if selected_course in active_courses:
             st.video("https://youtu.be/i_bn4E9EK_Q?si=576fE6mF7isaCkQT")
             st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
 
-    with tab2:
-
 # --- TAB 2: THE EXAM HALL ---
 with tab2:
     st.subheader("📝 Adaptive Exam Hall")
@@ -209,6 +207,7 @@ st.markdown(
     unsafe_allow_html=True
 
 )
+
 
 
 
