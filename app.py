@@ -87,7 +87,7 @@ if selected_course in active_courses:
             st.session_state.quiz_complete = False
 
         if st.button("🚀 Generate 7-Question Set"):
-            with st.spinner("Professor AI is drafting your exam..."):
+            with st.spinner("Drafting the questions, please wait!..."):
                 json_prompt = (
                     f"Act as a university professor for {selected_course}. "
                     f"Generate 7 MCQs on {selected_module} at {difficulty} level. "
@@ -182,6 +182,7 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
 
 
 
