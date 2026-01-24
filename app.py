@@ -81,58 +81,90 @@ if selected_course in active_courses:
             key="exam_diff"
         )
 
+        # 1. Initialize states if they don't exist
         if "quiz_set" not in st.session_state:
             st.session_state.quiz_set = []
             st.session_state.current_idx = 0
+            st.session_state.score = 0
             st.session_state.quiz_complete = False
+            st.session_state.answered = False # Tracks if current Q is answered
 
-        if st.button("🚀 Generate 7-Question Set"):
-            with st.spinner("Drafting the questions, please wait!..."):
+        # 2. GENERATE / RESTART LOGIC
+        if st.button("🚀 Generate New 7-Question Set") or (not st.session_state.quiz_set and not st.session_state.quiz_complete):
+            with st.spinner("Drafting...will be ready in seconds"):
                 json_prompt = (
-                    f"Act as a university professor for {selected_course}. "
-                    f"Generate 7 MCQs on {selected_module} at {difficulty} level. "
-                    "Output ONLY a JSON list of objects with these keys: "
-                    "'question', 'options' (a list of 4), and 'answer' (the exact string from options)."
+                    f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
+                    "Include a 'brief_explanation' (max 15 words) for the correct answer. "
+                    "Output ONLY a JSON list: [{'question': '...', 'options': ['A','B','C','D'], 'answer': '...', 'explanation': '...'}]"
                 )
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
                 st.session_state.quiz_set = json.loads(clean_json)
                 st.session_state.current_idx = 0
+                st.session_state.score = 0
                 st.session_state.quiz_complete = False
+                st.session_state.answered = False
                 st.rerun()
 
+        # 3. QUIZ INTERFACE
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
             q_data = st.session_state.quiz_set[st.session_state.current_idx]
             st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
             st.info(q_data["question"])
             
-            user_choice = st.radio("Choose the best answer:", q_data["options"], key=f"q_{st.session_state.current_idx}")
+            # Show radio buttons. Disable them once an answer is submitted.
+            user_choice = st.radio(
+                "Select your answer:", 
+                q_data["options"], 
+                key=f"q_{st.session_state.current_idx}",
+                disabled=st.session_state.answered
+            )
 
-            if st.button("Submit Answer"):
+            if not st.session_state.answered:
+                if st.button("Check Answer"):
+                    st.session_state.answered = True
+                    st.rerun()
+            
+            # --- COLOR FEEDBACK SECTION ---
+            if st.session_state.answered:
                 if user_choice == q_data["answer"]:
-                    st.success("Correct!")
+                    st.success(f"✅ **Correct!** {q_data['explanation']}")
+                    # Update score only once
+                    if f"scored_{st.session_state.current_idx}" not in st.session_state:
+                        st.session_state.score += 1
+                        st.session_state[f"scored_{st.session_state.current_idx}"] = True
                 else:
-                    st.error(f"Incorrect. The target was: {q_data['answer']}")
+                    st.error(f"❌ **Incorrect.** You chose {user_choice}.")
+                    st.success(f"💡 **The right answer was: {q_data['answer']}** \n\n {q_data['explanation']}")
+                    # Log failure for Socratic Tutor
                     st.session_state.failed_concept = {
                         "question": q_data["question"],
                         "wrong_ans": user_choice,
                         "right_ans": q_data["answer"]
                     }
-                
-                if st.session_state.current_idx < 6:
-                    st.session_state.current_idx += 1
-                    st.rerun()
-                else:
-                    st.session_state.quiz_complete = True
-                    st.rerun()
 
+                if st.button("Next Question ➡️"):
+                    if st.session_state.current_idx < 6:
+                        st.session_state.current_idx += 1
+                        st.session_state.answered = False
+                        st.rerun()
+                    else:
+                        st.session_state.quiz_complete = True
+                        st.rerun()
+
+        # 4. FINAL RESULTS
         elif st.session_state.quiz_complete:
-            st.success("🏁 Exam Complete!")
-            if st.button("Restart Quiz"):
+            st.balloons()
+            st.success(f"🏁 **Exam Complete! Your Radar Score: {st.session_state.score} / 7**")
+            
+            if st.button("🔄 Restart with New Questions"):
+                # Clear everything to force fresh generation
+                for key in list(st.session_state.keys()):
+                    if key.startswith("q_") or key.startswith("scored_"):
+                        del st.session_state[key]
                 st.session_state.quiz_set = []
                 st.session_state.quiz_complete = False
                 st.rerun()
-
     # --- TAB 3: THE SOCRATIC TUTOR ---
     with tab3:
         st.subheader("🎓 Socratic Assistant")
@@ -182,6 +214,7 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
 
 
 
