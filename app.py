@@ -72,9 +72,84 @@ if selected_course in active_courses:
             st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
 
     with tab2:
-        st.subheader("Knowledge Check")
-        st.info(f"The Exam Hall for {selected_module} is being prepared. MCQs will be available soon.")
+        # --- 1. LOCAL SIDEBAR ELEMENTS ---
+        # This slider only appears when the user has clicked on the Exam Hall tab
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🎯 Exam Settings")
+        difficulty = st.sidebar.select_slider(
+            "Set Challenge Level:",
+            options=["Foundational", "Intermediate", "Advanced"],
+            help="Foundational = Concepts | Intermediate = Application | Advanced = Complex Analysis"
+        )
 
+        st.subheader("📝 Adaptive Exam Hall")
+        st.write(f"Current Level: **{difficulty}**")
+
+        # --- 2. INITIALIZE QUIZ STATE ---
+        if "quiz_questions" not in st.session_state:
+            st.session_state.quiz_questions = []
+            st.session_state.current_idx = 0
+            st.session_state.score = 0
+            st.session_state.quiz_complete = False
+
+        # --- 3. GENERATION LOGIC ---
+        if st.button("🚀 Generate New 7-Question Set"):
+            with st.spinner(f"Radar is scanning {selected_module} to craft {difficulty} questions..."):
+                # The Prompt now includes the difficulty from the slider
+                quiz_prompt = (
+                    f"Generate a set of 7 unique Multiple Choice Questions for {selected_course}: {selected_module}. "
+                    f"Difficulty Level: {difficulty}. "
+                    "Return ONLY the questions and options. "
+                    "Format: Question | A) .. | B) .. | C) .. | D) .. | Correct: [Letter]"
+                )
+                
+                # Call Gemini
+                response = model.generate_content(quiz_prompt)
+                
+                # Split the AI response into a list of 7 items
+                # We assume the AI separates questions with double newlines
+                raw_questions = response.text.strip().split("\n\n")
+                
+                # Store in session state
+                st.session_state.quiz_questions = raw_questions[:7] # Ensure exactly 7
+                st.session_state.current_idx = 0
+                st.session_state.score = 0
+                st.session_state.quiz_complete = False
+                st.rerun()
+
+        # --- 4. DISPLAY & NAVIGATION ---
+        if st.session_state.quiz_questions and not st.session_state.quiz_complete:
+            idx = st.session_state.current_idx
+            st.markdown(f"### Question {idx + 1} of 7")
+            
+            # Show the current question
+            st.info(st.session_state.quiz_questions[idx])
+            
+            # Answer Input
+            user_ans = st.text_input("Enter A, B, C, or D:", key=f"input_{idx}").upper()
+
+            col1, col2 = st.columns([1, 4])
+            with col1:
+                if st.button("Submit Answer"):
+                    # For now, we move forward. 
+                    # Tomorrow we add the logic to 'parse' the AI's correct answer and score it.
+                    if st.session_state.current_idx < 6:
+                        st.session_state.current_idx += 1
+                        st.rerun()
+                    else:
+                        st.session_state.quiz_complete = True
+                        st.rerun()
+            with col2:
+                st.caption("Submit to proceed to the next question.")
+
+        # --- 5. FINAL RESULTS ---
+        elif st.session_state.quiz_complete:
+            st.success("🏁 Exam Completed!")
+            st.metric("Total Score", f"{st.session_state.score}/7")
+            if st.button("Clear Results & Restart"):
+                del st.session_state.quiz_questions
+                st.session_state.quiz_complete = False
+                st.rerun()
     with tab3:
         # 2. Page UI
         st.header("Socratic Assistant")
@@ -120,4 +195,5 @@ st.markdown(
     </div>
     """, 
     unsafe_allow_html=True
+
 )
