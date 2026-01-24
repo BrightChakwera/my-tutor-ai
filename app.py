@@ -1,5 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
+import json
 
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -72,86 +73,98 @@ if selected_course in active_courses:
             st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
 
     with tab2:
-# MOVE THE SLIDER HERE - But remove 'sidebar' so it only shows in the hall
-        st.subheader("📝 Adaptive Exam Hall")
-        
-        # Placing it here makes it vanish when you leave the tab!
-        difficulty = st.select_slider(
-            "Set Your Challenge Level:",
-            options=["Foundational", "Intermediate", "Advanced"]
-        )
-        st.divider() # Adds a nice clean line
 
-        # --- 2. INITIALIZE QUIZ STATE ---
-        if "quiz_questions" not in st.session_state:
-            st.session_state.quiz_questions = []
+# --- TAB 2: THE EXAM HALL ---
+with tab2:
+    st.subheader("📝 Adaptive Exam Hall")
+    
+    # 1. Difficulty Slider (Main Area)
+    difficulty = st.select_slider(
+        "Set Your Challenge Level:",
+        options=["Foundational", "Intermediate", "Advanced"],
+        key="exam_diff"
+    )
+
+    # 2. State Initialization
+    if "quiz_set" not in st.session_state:
+        st.session_state.quiz_set = []
+        st.session_state.current_idx = 0
+        st.session_state.quiz_complete = False
+        st.session_state.last_feedback = ""
+
+    # 3. AI Question Generation (Structured)
+    if st.button("🚀 Generate 7-Question Set"):
+        with st.spinner("Professor AI is drafting your exam..."):
+            # We tell Gemini to give us JSON format
+            json_prompt = (
+                f"Act as a university professor for {selected_course}. "
+                f"Generate 7 MCQs on {selected_module} at {difficulty} level. "
+                "Output ONLY a JSON list of objects with these keys: "
+                "'question', 'options' (a list of 4), and 'answer' (the exact string from options)."
+            )
+            response = model.generate_content(json_prompt)
+            
+            # Clean the response and parse it
+            # We strip any markdown code blocks the AI might add
+            clean_json = response.text.replace("```json", "").replace("```", "").strip()
+            st.session_state.quiz_set = json.loads(clean_json)
             st.session_state.current_idx = 0
-            st.session_state.score = 0
             st.session_state.quiz_complete = False
+            st.rerun()
 
-        # --- 3. GENERATION LOGIC ---
-        if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner(f"Radar is scanning {selected_module} to craft {difficulty} questions..."):
-                # The Prompt now includes the difficulty from the slider
-                quiz_prompt = (
-                    f"Generate a set of 7 unique Multiple Choice Questions for {selected_course}: {selected_module}. "
-                    f"Difficulty Level: {difficulty}. "
-                    "Return ONLY the questions and options. "
-                    "Format: Question | A) .. | B) .. | C) .. | D) .. | Correct: [Letter]"
-                )
-                
-                # Call Gemini
-                response = model.generate_content(quiz_prompt)
-                
-                # Split the AI response into a list of 7 items
-                # We assume the AI separates questions with double newlines
-                raw_questions = response.text.strip().split("\n\n")
-                
-                # Store in session state
-                st.session_state.quiz_questions = raw_questions[:7] # Ensure exactly 7
-                st.session_state.current_idx = 0
-                st.session_state.score = 0
-                st.session_state.quiz_complete = False
+    # 4. Displaying the Structured Quiz
+    if st.session_state.quiz_set and not st.session_state.quiz_complete:
+        q_data = st.session_state.quiz_set[st.session_state.current_idx]
+        
+        st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
+        st.info(q_data["question"])
+        
+        # REAL BUTTONS (Radio)
+        user_choice = st.radio("Choose the best answer:", q_data["options"], key=f"q_{st.session_state.current_idx}")
+
+        if st.button("Submit Answer"):
+            if user_choice == q_data["answer"]:
+                st.success("Correct!")
+                st.session_state.last_feedback = "Correct"
+            else:
+                st.error(f"Incorrect. The target was: {q_data['answer']}")
+                # THE BRIDGE: Save the failure for Tab 3
+                st.session_state.failed_concept = {
+                    "question": q_data["question"],
+                    "wrong_ans": user_choice,
+                    "right_ans": q_data["answer"]
+                }
+            
+            # Move to next
+            if st.session_state.current_idx < 6:
+                st.session_state.current_idx += 1
+                st.rerun()
+            else:
+                st.session_state.quiz_complete = True
                 st.rerun()
 
-        # --- 4. DISPLAY & NAVIGATION ---
-        if st.session_state.quiz_questions and not st.session_state.quiz_complete:
-            idx = st.session_state.current_idx
-            st.markdown(f"### Question {idx + 1} of 7")
-            
-            # Show the current question
-            st.info(st.session_state.quiz_questions[idx])
-            
-            # Answer Input
-            user_ans = st.text_input("Enter A, B, C, or D:", key=f"input_{idx}").upper()
+    elif st.session_state.quiz_complete:
+        st.success("🏁 Exam Complete!")
+        if st.button("Restart"):
+            st.session_state.quiz_set = []
+            st.rerun()
 
-            col1, col2 = st.columns([1, 4])
-            with col1:
-                if st.button("Submit Answer"):
-                    # For now, we move forward. 
-                    # Tomorrow we add the logic to 'parse' the AI's correct answer and score it.
-                    if st.session_state.current_idx < 6:
-                        st.session_state.current_idx += 1
-                        st.rerun()
-                    else:
-                        st.session_state.quiz_complete = True
-                        st.rerun()
-            with col2:
-                st.caption("Submit to proceed to the next question.")
+# --- TAB 3: THE SOCRATIC TUTOR ---
+with tab3:
+    st.subheader("🎓 Socratic Assistant")
+    
+    # Check if a student just came from a failed quiz question
+    if "failed_concept" in st.session_state:
+        st.warning("⚠️ Logic Gap Detected")
+        st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
+        if st.button("Coach me on this"):
+            # Pre-load the chat with the failure context
+            context_prompt = f"The student just missed a quiz question. They thought the answer was {st.session_state.failed_concept['wrong_ans']} but it was {st.session_state.failed_concept['right_ans']}. Don't give the answer, ask a guiding question to fix their logic."
+            st.session_state.messages.append({"role": "user", "content": context_prompt})
+            del st.session_state.failed_concept # Clear the notification
+            st.rerun()
 
-        # --- 5. FINAL RESULTS ---
-        elif st.session_state.quiz_complete:
-            st.success("🏁 Exam Completed!")
-            st.metric("Total Score", f"{st.session_state.score}/7")
-            if st.button("Clear Results & Restart"):
-                del st.session_state.quiz_questions
-                st.session_state.quiz_complete = False
-                st.rerun()
-    with tab3:
-        # 2. Page UI
-        st.header("Socratic Assistant")
-        st.caption(f"I am your {selected_course} expert. I’ll guide you with questions to help you master {selected_module or 'the material'}.")
-
+    # --- YOUR EXISTING CHAT UI CODE GOES HERE ---
         # 3. Chat Logic
         model = genai.GenerativeModel('gemini-1.5-flash') # Updated to a stable model version
 
@@ -194,6 +207,7 @@ st.markdown(
     unsafe_allow_html=True
 
 )
+
 
 
 
