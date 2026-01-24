@@ -5,7 +5,7 @@ import json
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 # Defining the model - using latest for better JSON reliability
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # 2. SIDEBAR: The Course Menu
 st.sidebar.title("Radar Grad-Tutors")
@@ -189,4 +189,58 @@ if selected_course in active_courses:
                     st.session_state.quiz_complete = False
                     st.rerun()
             with c2:
-                st.write("Need help? Head to the **Socratic Tutor**
+                st.write("Need help? Head to the **Socratic Tutor** tab!")
+                
+    # --- TAB 3: THE SOCRATIC TUTOR ---
+    with tab3:
+        st.subheader("🎓 Socratic Assistant")
+        
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        if "failed_concept" in st.session_state:
+            st.warning("⚠️ Logic Gap Detected")
+            st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
+            if st.button("Coach me on this"):
+                context_prompt = (
+                    f"The student just missed a quiz question. They thought the answer was "
+                    f"'{st.session_state.failed_concept['wrong_ans']}' but it was actually "
+                    f"'{st.session_state.failed_concept['right_ans']}'. Don't give the answer, "
+                    "ask a guiding question to help them realize why the correct answer makes sense."
+                )
+                st.session_state.messages.append({"role": "user", "content": context_prompt})
+                del st.session_state.failed_concept
+                st.rerun()
+
+        for msg in st.session_state.messages:
+            st.chat_message(msg["role"]).write(msg["content"])
+
+        if prompt := st.chat_input():
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+
+            full_prompt = (
+                f"System: You are a Socratic University Tutor for {selected_course} ({selected_module}). "
+                "Never give answers immediately. Always ask a helpful guiding question first."
+                f"\nStudent: {prompt}"
+            )
+            
+            response = model.generate_content(full_prompt)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.chat_message("assistant").write(response.text)
+else:
+    st.title(selected_course)
+    st.warning("🚀 This course is launching soon!")
+    st.write("We are currently organizing the curriculum for this subject. Check back next week!")
+
+# --- FOOTER ---
+st.markdown("---") 
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <p style="color: gray;">© 2026 Radar Grad-Tutors | Precision Learning for University Students</p>
+        <p> <i>"Detecting Gaps, Delivering Grades"</i></p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+                )
