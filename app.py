@@ -72,17 +72,16 @@ if selected_course in active_courses:
             st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
 
     with tab2:
-        # --- 1. LOCAL SIDEBAR ELEMENTS ---
-        # This slider only appears when the user has clicked on the Exam Hall tab
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🎯 Exam Settings")
-        difficulty = st.sidebar.select_slider(
-            "Set Challenge Level:",
-            options=["Foundational", "Intermediate", "Advanced"],
-            help="Foundational = Concepts | Intermediate = Application | Advanced = Complex Analysis"
-        )
-
+# MOVE THE SLIDER HERE - But remove 'sidebar' so it only shows in the hall
         st.subheader("📝 Adaptive Exam Hall")
+        
+        # Placing it here makes it vanish when you leave the tab!
+        difficulty = st.select_slider(
+            "Set Your Challenge Level:",
+            options=["Foundational", "Intermediate", "Advanced"]
+        )
+        
+        st.divider() # Adds a nice clean line
         st.write(f"Current Level: **{difficulty}**")
 
         # --- 2. INITIALIZE QUIZ STATE ---
@@ -197,3 +196,4 @@ st.markdown(
     unsafe_allow_html=True
 
 )
+
