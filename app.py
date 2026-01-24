@@ -5,7 +5,7 @@ import json
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 # Defining the model
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # 2. SIDEBAR: The Course Menu
 st.sidebar.title("Radar Grad-Tutors")
@@ -230,3 +230,4 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
+
