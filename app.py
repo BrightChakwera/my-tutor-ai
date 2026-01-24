@@ -75,7 +75,7 @@ if selected_course in active_courses:
             st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
 
 # --- TAB 2: THE EXAM HALL ---
-with tab2:
+    with tab2:
     st.subheader("📝 Adaptive Exam Hall")
     
     # 1. Difficulty Slider (Main Area)
@@ -150,7 +150,7 @@ with tab2:
             st.rerun()
 
 # --- TAB 3: THE SOCRATIC TUTOR ---
-with tab3:
+    with tab3:
     st.subheader("🎓 Socratic Assistant")
     
     # Check if a student just came from a failed quiz question
@@ -207,6 +207,7 @@ st.markdown(
     unsafe_allow_html=True
 
 )
+
 
 
 
