@@ -1,199 +1,95 @@
 import streamlit as st
 import google.generativeai as genai
 import json
+import pdfplumber
+import io
 
-# 1. SETUP: API Configuration
+# 1. SETUP: API & System Prompt
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-# Defining the model - using latest for better JSON reliability
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-# 2. SIDEBAR: The Course Menu
-st.sidebar.title("Radar Grad-Tutors")
-course_list = [
-    "College Algebra",
-    "Elementary Calculus",
-    "Elementary Microeconomics", 
-    "Elementary Macroeconomics", 
-    "Mathematics for Economists",
-    "Statistics for Social Scientist",
-    "Intermediate Microeconomics", 
-    "Intermediate Macroeconomics", 
-    "Econometrics 1", 
-    "Econometrics 2"
-]
-selected_course = st.sidebar.selectbox("Choose a Course:", course_list)
+# --- PDF EXTRACTION HELPER ---
+def extract_text_from_pdf(uploaded_file):
+    with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
+        text = ""
+        for page in pdf.pages:
+            text += page.extract_text() + "\n"
+    return text
 
-# --- MODULE SELECTOR LOGIC ---
-selected_module = None
-if selected_course == "Elementary Calculus":
-    modules = ["Unit 1: Limits & Continuity", "Unit 2: Derivatives", "Unit 3: Integration"]
-    selected_module = st.sidebar.radio("Course Curriculum:", modules)
+# 2. SIDEBAR: The Tiered Menu
+st.sidebar.title("🛰️ Radar Grad-Tutors")
 
-elif selected_course == "Elementary Macroeconomics":
-    modules = ["Unit 1: GDP & Growth", "Unit 2: Inflation", "Unit 3: Fiscal Policy"]
-    selected_module = st.sidebar.radio("Course Curriculum:", modules)
+# TIER SELECTOR
+access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
-elif selected_course == "Elementary Microeconomics":
-    modules = ["Unit 1: Supply & Demand", "Unit 2: Elasticity", "Unit 3: Market Structures"]
-    selected_module = st.sidebar.radio("Course Curriculum:", modules)
+selected_course = None
+active_unit_context = ""
 
-# 3. ROUTING: Active vs. Upcoming Courses
-active_courses = ["Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"]
+if access_mode == "Basic (Pre-built)":
+    course_list = ["Elementary Calculus", "Elementary Microeconomics", "Elementary Macroeconomics"]
+    selected_course = st.sidebar.selectbox("Choose Course:", course_list)
+    # (Simple logic for pre-built modules here as per your previous code)
 
-if selected_course in active_courses:
-    st.title(f"{selected_course}")
-    if selected_module:
-        st.caption(f"Current Module: {selected_module}")
+else:
+    st.sidebar.subheader("💎 Premium: Syllabus Sync")
+    syllabus_file = st.sidebar.file_uploader("1. Upload Syllabus (The Map)", type=["pdf"])
     
-    # Create the 3 Tabs
-    tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
-
-    with tab1:
-        st.subheader("Today's Learning Material")
+    if syllabus_file:
+        if "custom_units" not in st.session_state:
+            with st.spinner("Mapping Curriculum..."):
+                raw_syllabus = extract_text_from_pdf(syllabus_file)
+                prompt = f"Extract a numbered list of Units/Topics from this syllabus: {raw_syllabus[:3000]}"
+                st.session_state.custom_units = model.generate_content(prompt).text
         
-        # DYNAMIC CONTENT SWITCHER
-        if selected_module == "Unit 1: Limits & Continuity":
-            st.video("https://youtu.be/REEAJ_T8v7U") 
-            st.write("Welcome to Limits. We are exploring how functions behave as they approach a specific point.")
+        st.sidebar.info("Course Map Detected")
+        st.sidebar.caption(st.session_state.custom_units)
         
-        elif selected_module == "Unit 2: Derivatives":
-            st.video("https://youtu.be/ANyVpMS3HL4") 
-            st.write("In this unit, we master the Power Rule and the concept of instantaneous rate of change.")
+        unit_notes = st.sidebar.file_uploader("2. Upload Unit Notes (The Content)", type=["pdf"])
+        if unit_notes:
+            active_unit_context = extract_text_from_pdf(unit_notes)
+            st.sidebar.success("Unit Content Loaded!")
 
-        elif selected_module == "Unit 1: GDP & Growth":
-            st.video("https://youtu.be/yUiU_xrpP-c") 
-            st.write("Learn how nations measure wealth and the difference between Real and Nominal GDP.")
+# 3. MAIN INTERFACE
+st.title("Radar Learning Platform")
+tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
 
-        elif selected_module == "Unit 2: Elasticity":
-            st.video("https://youtu.be/HHcblIxiAAk") 
-            st.write("We are analyzing how sensitive consumers are to price changes.")
-
-        else:
-            st.video("https://youtu.be/i_bn4E9EK_Q?si=576fE6mF7isaCkQT")
-            st.write(f"Welcome to the module: {selected_module}. Please follow the lecture video above.")
-
-    # --- TAB 2: THE EXAM HALL ---
-    with tab2:
-        st.subheader("📝 Adaptive Exam Hall")
-        difficulty = st.select_slider(
-            "Set Your Challenge Level:",
-            options=["Foundational", "Intermediate", "Advanced"],
-            key="exam_diff"
-        )
-
-        # 1. Initialize states
-        if "quiz_set" not in st.session_state:
-            st.session_state.quiz_set = []
-            st.session_state.current_idx = 0
-            st.session_state.score = 0
-            st.session_state.quiz_complete = False
-            st.session_state.answered = False 
-
-        # 2. GENERATE / RESTART LOGIC
-        if st.button("Generate New 7-Question Set"):
-            with st.spinner("Drafting...will be ready in seconds!"):
-                # ENHANCED PROMPT for exact string matching
-                json_prompt = (
-                    f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
-                    "The 'answer' key must contain the EXACT string from the 'options' list. Do not add 'A)' or 'B)' to the answer if it is not in the options. "
-                    "Include a 'brief_explanation' (max 15 words) for the correct answer. "
-                    "Output ONLY a JSON list of 7 objects: [{'question': '...', 'options': ['...', '...', '...', '...'], 'answer': '...', 'explanation': '...'}]"
+# --- TAB 1: LESSON HALL (Visual Hierarchy Notes) ---
+with tab1:
+    if access_mode == "Premium (Custom Radar)" and active_unit_context:
+        st.subheader("📚 Your Personalized Radar Digest")
+        if st.button("Generate Unit Digest"):
+            with st.spinner("Designing Visual Notes..."):
+                digest_prompt = (
+                    f"Using these notes: {active_unit_context[:5000]}, create a study guide. "
+                    "Use H1 for titles, H3 for sub-topics, bold for terms, and > for definitions. "
+                    "Format as a 'Mastery Document'."
                 )
-                response = model.generate_content(json_prompt)
-                clean_json = response.text.replace("```json", "").replace("```", "").strip()
-                
-                st.session_state.quiz_set = json.loads(clean_json)
-                st.session_state.current_idx = 0
-                st.session_state.score = 0
-                st.session_state.quiz_complete = False
-                st.session_state.answered = False
-                st.rerun()
+                response = model.generate_content(digest_prompt)
+                st.markdown(response.text)
+    else:
+        st.info("Please upload unit notes in Premium mode or select a Basic course to see content.")
 
-        if not st.session_state.quiz_set and not st.session_state.quiz_complete:
-            st.write("---")
-            st.info("The Exam Hall is currently quiet. Adjust your difficulty above and tap the button to begin.")
-
-        # 3. QUIZ INTERFACE
-        if st.session_state.quiz_set and not st.session_state.quiz_complete:
-            q_data = st.session_state.quiz_set[st.session_state.current_idx]
-            st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
-            st.info(q_data["question"])
+# --- TAB 2: EXAM HALL (The Radar Scan) ---
+with tab2:
+    st.subheader("📝 Adaptive Exam Hall")
+    if st.button("🚀 Generate 7-Question Assessment"):
+        with st.spinner("Analyzing context..."):
+            # Determine which source to use
+            source = active_unit_context if active_unit_context else "General knowledge of " + selected_course
             
-            user_choice = st.radio(
-                "Select your answer:", 
-                q_data["options"], 
-                key=f"q_{st.session_state.current_idx}",
-                disabled=st.session_state.answered
+            prompt = (
+                f"Based on: {source[:4000]}, generate 7 MCQs. "
+                "Ensure the 'answer' matches an option exactly. Output ONLY JSON."
             )
+            response = model.generate_content(prompt)
+            # (Insert your existing JSON parsing & Quiz display logic here)
+            st.write("Questions generated! (Logic mapping to current UI...)")
 
-            if not st.session_state.answered:
-                if st.button("Check Answer"):
-                    st.session_state.answered = True
-                    st.rerun()
-            
-            # --- COLOR FEEDBACK SECTION & COMPARISON ---
-            if st.session_state.answered:
-                selected = str(user_choice).strip()
-                correct = str(q_data["answer"]).strip()
-
-                if selected == correct:
-                    st.success(f"✅ **Correct!** {q_data.get('explanation', '')}")
-                    if f"scored_{st.session_state.current_idx}" not in st.session_state:
-                        st.session_state.score += 1
-                        st.session_state[f"scored_{st.session_state.current_idx}"] = True
-                else:
-                    st.error(f"❌ **Incorrect.** You chose: {selected}")
-                    st.success(f"💡 **The right answer was: {correct}** \n\n {q_data.get('explanation', '')}")
-                    
-                    st.session_state.failed_concept = {
-                        "question": q_data["question"],
-                        "wrong_ans": selected,
-                        "right_ans": correct
-                    }
-
-                # Navigation button
-                if st.button("Next Question ➡️"):
-                    if st.session_state.current_idx < 6:
-                        st.session_state.current_idx += 1
-                        st.session_state.answered = False
-                        st.rerun()
-                    else:
-                        st.session_state.quiz_complete = True
-                        st.rerun()
-
-        # 4. FINAL RESULTS
-        elif st.session_state.quiz_complete:
-            percent = (st.session_state.score / 7) * 100
-            if percent == 100:
-                st.balloons()
-                st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
-            elif percent >= 70:
-                st.snow()
-                st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
-            else:
-                st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
-
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Correct", f"{st.session_state.score}")
-            col2.metric("Accuracy", f"{int(percent)}%")
-            col3.metric("Level", difficulty)
-
-            st.markdown("---")
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🔄 Restart with New Questions"):
-                    for key in list(st.session_state.keys()):
-                        if key.startswith("q_") or key.startswith("scored_"):
-                            del st.session_state[key]
-                    st.session_state.quiz_set = []
-                    st.session_state.quiz_complete = False
-                    st.rerun()
-            with c2:
-                st.write("Need help? Head to the **Socratic Tutor** tab!")
-                
-    # --- TAB 3: THE SOCRATIC TUTOR ---
-    with tab3:
-        st.subheader("🎓 Socratic Assistant")
+# --- TAB 3: SOCRATIC TUTOR ---
+with tab3:
+    st.subheader("🎓 Socratic Mentor")
+    st.write("Ready to bridge your logic gaps. What part of the notes was confusing?")
+    # (Insert your existing Socratic chat logic here)
         
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -244,4 +140,5 @@ st.markdown(
     """, 
     unsafe_allow_html=True
                 )
+
 
