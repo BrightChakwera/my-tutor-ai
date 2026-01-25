@@ -6,7 +6,7 @@ import io
 
 # 1. SETUP: API & System Prompt
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 # --- PDF EXTRACTION HELPER ---
 def extract_text_from_pdf(uploaded_file):
@@ -24,11 +24,12 @@ access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (
 
 selected_course = None
 active_unit_context = ""
+selected_module = "General Module" # Placeholder for logic consistency
 
 if access_mode == "Basic (Pre-built)":
     course_list = ["Elementary Calculus", "Elementary Microeconomics", "Elementary Macroeconomics"]
     selected_course = st.sidebar.selectbox("Choose Course:", course_list)
-    # (Simple logic for pre-built modules here as per your previous code)
+    # Note: Insert your previous unit selection logic for basic courses here
 
 else:
     st.sidebar.subheader("💎 Premium: Syllabus Sync")
@@ -51,45 +52,46 @@ else:
 
 # 3. MAIN INTERFACE
 st.title("Radar Learning Platform")
-tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
 
-# --- TAB 1: LESSON HALL (Visual Hierarchy Notes) ---
-with tab1:
-    if access_mode == "Premium (Custom Radar)" and active_unit_context:
-        st.subheader("📚 Your Personalized Radar Digest")
-        if st.button("Generate Unit Digest"):
-            with st.spinner("Designing Visual Notes..."):
-                digest_prompt = (
-                    f"Using these notes: {active_unit_context[:5000]}, create a study guide. "
-                    "Use H1 for titles, H3 for sub-topics, bold for terms, and > for definitions. "
-                    "Format as a 'Mastery Document'."
+# Logic to handle if a course is active
+active_courses = ["Elementary Calculus", "Elementary Microeconomics", "Elementary Macroeconomics"]
+
+if access_mode == "Premium (Custom Radar)" or (selected_course in active_courses):
+    tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
+
+    # --- TAB 1: LESSON HALL ---
+    with tab1:
+        if access_mode == "Premium (Custom Radar)" and active_unit_context:
+            st.subheader("📚 Your Personalized Radar Digest")
+            if st.button("Generate Unit Digest"):
+                with st.spinner("Designing Visual Notes..."):
+                    digest_prompt = (
+                        f"Using these notes: {active_unit_context[:5000]}, create a study guide. "
+                        "Use H1 for titles, H3 for sub-topics, bold for terms, and > for definitions. "
+                        "Format as a 'Mastery Document' with high visual hierarchy."
+                    )
+                    response = model.generate_content(digest_prompt)
+                    st.markdown(response.text)
+        else:
+            st.info("Please upload unit notes in Premium mode or select a Basic course to see content.")
+
+    # --- TAB 2: EXAM HALL ---
+    with tab2:
+        st.subheader("📝 Adaptive Exam Hall")
+        if st.button("🚀 Generate 7-Question Assessment"):
+            with st.spinner("Analyzing context..."):
+                source = active_unit_context if active_unit_context else "General knowledge of " + str(selected_course)
+                
+                prompt = (
+                    f"Based on: {source[:4000]}, generate 7 MCQs. "
+                    "Ensure the 'answer' matches an option exactly. Output ONLY JSON."
                 )
-                response = model.generate_content(digest_prompt)
-                st.markdown(response.text)
-    else:
-        st.info("Please upload unit notes in Premium mode or select a Basic course to see content.")
+                response = model.generate_content(prompt)
+                st.write("Questions generated! (Insert quiz logic here)")
 
-# --- TAB 2: EXAM HALL (The Radar Scan) ---
-with tab2:
-    st.subheader("📝 Adaptive Exam Hall")
-    if st.button("🚀 Generate 7-Question Assessment"):
-        with st.spinner("Analyzing context..."):
-            # Determine which source to use
-            source = active_unit_context if active_unit_context else "General knowledge of " + selected_course
-            
-            prompt = (
-                f"Based on: {source[:4000]}, generate 7 MCQs. "
-                "Ensure the 'answer' matches an option exactly. Output ONLY JSON."
-            )
-            response = model.generate_content(prompt)
-            # (Insert your existing JSON parsing & Quiz display logic here)
-            st.write("Questions generated! (Logic mapping to current UI...)")
-
-# --- TAB 3: SOCRATIC TUTOR ---
-with tab3:
-    st.subheader("🎓 Socratic Mentor")
-    st.write("Ready to bridge your logic gaps. What part of the notes was confusing?")
-    # (Insert your existing Socratic chat logic here)
+    # --- TAB 3: SOCRATIC TUTOR ---
+    with tab3:
+        st.subheader("🎓 Socratic Mentor")
         
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -111,12 +113,12 @@ with tab3:
         for msg in st.session_state.messages:
             st.chat_message(msg["role"]).write(msg["content"])
 
-        if prompt := st.chat_input():
+        if prompt := st.chat_input("Ask your tutor a question..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
 
             full_prompt = (
-                f"System: You are a Socratic University Tutor for {selected_course} ({selected_module}). "
+                f"System: You are a Socratic University Tutor. "
                 "Never give answers immediately. Always ask a helpful guiding question first."
                 f"\nStudent: {prompt}"
             )
@@ -124,10 +126,11 @@ with tab3:
             response = model.generate_content(full_prompt)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
             st.chat_message("assistant").write(response.text)
+
 else:
-    st.title(selected_course)
+    st.subheader(selected_course)
     st.warning("🚀 This course is launching soon!")
-    st.write("We are currently organizing the curriculum for this subject. Check back next week!")
+    st.write("Check back next week!")
 
 # --- FOOTER ---
 st.markdown("---") 
@@ -140,5 +143,3 @@ st.markdown(
     """, 
     unsafe_allow_html=True
                 )
-
-
