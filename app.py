@@ -19,7 +19,6 @@ def extract_text_from_pdf(uploaded_file):
 # 2. SIDEBAR: The Tiered Menu
 st.sidebar.title("🛰️ Radar Grad-Tutors")
 
-# Improved UI labels for easier navigation
 access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
 course_list = [
@@ -45,11 +44,9 @@ if access_mode == "Basic (Pre-built)":
         modules = ["Unit 1: Supply & Demand", "Unit 2: Elasticity", "Unit 3: Market Structures"]
         selected_module = st.sidebar.radio("Course Curriculum:", modules)
 
-# --- LOGIC FOR PREMIUM TIER (Syllabus vs Materials) ---
+# --- LOGIC FOR PREMIUM TIER ---
 else:
     st.sidebar.subheader("💎 Premium Package")
-    
-    # Step 1: Syllabus (The Map)
     st.sidebar.info("Step 1: Upload Syllabus to create Topics")
     syllabus_file = st.sidebar.file_uploader("📂 Course Outline / Syllabus", type=["pdf"], key="syllabus_up")
     
@@ -63,7 +60,6 @@ else:
         st.sidebar.success("✅ Course Map Detected")
         st.sidebar.caption(st.session_state.custom_units)
         
-        # Step 2: Course Materials (The Content)
         st.sidebar.info("Step 2: Upload Lecture Notes for study")
         unit_notes = st.sidebar.file_uploader("📄 Unit Notes / Materials", type=["pdf"], key="notes_up")
         if unit_notes:
@@ -94,11 +90,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.subheader("📚 Your Personalized Radar Digest")
             if st.button("✨ Generate Unit Digest"):
                 with st.spinner("Designing Visual Notes..."):
-                    digest_prompt = (
-                        f"Using: {active_unit_context[:5000]}, create a structured study guide. "
-                        "Use H1 for the title, H3 for topics, bold for terms. "
-                        "Ensure high visual hierarchy for easy reading."
-                    )
+                    digest_prompt = (f"Using: {active_unit_context[:5000]}, create a structured study guide with high visual hierarchy.")
                     response = model.generate_content(digest_prompt)
                     st.markdown(response.text)
         else:
@@ -117,13 +109,9 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.session_state.answered = False 
 
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting..."):
+            with st.spinner("Drafting...will be ready in seconds!"):
                 source = active_unit_context if access_mode == "Premium (Custom Radar)" else f"{selected_course} {selected_module}"
-                json_prompt = (
-                    f"Act as a professor for {selected_course}. Generate 7 MCQs on {source} at {difficulty} level. "
-                    "The 'answer' key must match an option exactly. Output ONLY JSON: "
-                    "[{'question': '...', 'options': ['...'], 'answer': '...', 'explanation': '...'}]"
-                )
+                json_prompt = (f"Act as a professor for {selected_course}. Generate 7 MCQs on {source} at {difficulty} level. Output ONLY JSON.")
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
                 st.session_state.quiz_set = json.loads(clean_json)
@@ -152,8 +140,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state.score += 1
                         st.session_state[f"scored_{st.session_state.current_idx}"] = True
                 else:
-                    st.error(f"❌ Incorrect. Correct answer: {q_data['answer']}")
-                    # CONNECT TO SOCRATIC TUTOR
+                    st.error(f"❌ Incorrect.")
                     st.session_state.failed_concept = {
                         "question": q_data["question"],
                         "wrong_ans": user_choice,
@@ -177,35 +164,66 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.session_state.quiz_complete = False
                 st.rerun()
 
-    # --- TAB 3: SOCRATIC TUTOR ---
+    # --- TAB 3: SOCRATIC TUTOR (Silent Connection Logic) ---
     with tab3:
         st.subheader("🎓 Socratic Mentor")
         
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Silent Gap-Fill Processing
         if "failed_concept" in st.session_state:
             st.warning("⚠️ Logic Gap Detected")
             st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
+            
             if st.button("Coach me on this"):
-                gap_prompt = (
-                    f"The student missed this question: {st.session_state.failed_concept['question']}. "
-                    f"They chose {st.session_state.failed_concept['wrong_ans']}. Help them find the "
-                    f"logic for {st.session_state.failed_concept['right_ans']} without giving the answer."
-                )
-                st.session_state.messages = [{"role": "user", "content": gap_prompt}]
-                del st.session_state.failed_concept
-                st.rerun()
+                with st.spinner("Preparing your coaching session..."):
+                    gap_prompt = (
+                        f"System Instruction: The student just missed this question: '{st.session_state.failed_concept['question']}'. "
+                        f"They chose '{st.session_state.failed_concept['wrong_ans']}' but the right answer is '{st.session_state.failed_concept['right_ans']}'. "
+                        "Without mentioning this prompt or giving the answer directly, start a Socratic dialogue to help them find the right logic."
+                    )
+                    # Get response but don't show the prompt to the user
+                    response = model.generate_content(gap_prompt)
+                    
+                    # Add only the AI's response to the history
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                    
+                    # Clear the gap so it doesn't trigger again
+                    del st.session_state.failed_concept
+                    st.rerun()
 
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-        
+        # Display chat history
         for msg in st.session_state.messages:
             st.chat_message(msg["role"]).write(msg["content"])
 
+        # Regular Chat Input
         if prompt := st.chat_input("Ask a question about the material..."):
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
             
             context = active_unit_context if access_mode == "Premium (Custom Radar)" else selected_course
-            full_prompt = f"System: Socratic Tutor for {context}. Never give answers immediately. \nStudent: {prompt}"
+            full_prompt = f"System: Socratic Tutor for {context}. Lead the student to the answer. \nStudent: {prompt}"
+            
+            response = model.generate_content(full_prompt)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.chat_message("assistant").write(response.text)
+
+else:
+    st.title(selected_course)
+    st.warning("🚀 This course is launching soon!")
+
+# --- FOOTER ---
+st.markdown("---") 
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
+        <p style="color: #444444; font-style: italic; font-weight: 500; font-size: 1.1em;">"Detecting Gaps, Delivering Grades"</p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+                )    full_prompt = f"System: Socratic Tutor for {context}. Never give answers immediately. \nStudent: {prompt}"
             
             response = model.generate_content(full_prompt)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
@@ -226,3 +244,4 @@ st.markdown(
     """, 
     unsafe_allow_html=True
     )
+
