@@ -79,7 +79,7 @@ else:
             st.sidebar.success("✅ Unit Content Ingested")
 
 # 3. MAIN ROUTING
-active_courses = ["Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"]
+active_courses = ["College Algebra", "Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"]
 
 if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     st.title(f"{selected_course if access_mode == 'Basic (Pre-built)' else 'Custom Radar Vault'}")
@@ -122,7 +122,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.session_state.snow_triggered = False 
 
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting..."):
+            with st.spinner("Drafting...will be ready in seconds!"):
                 json_prompt = (
                     f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
                     "Output ONLY a JSON list of 7 objects: [{'question': '...', 'options': ['...', '...', '...', '...'], 'answer': '...', 'explanation': '...'}]"
@@ -172,11 +172,29 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
 
         elif st.session_state.quiz_complete:
             percent = (st.session_state.score / 7) * 100
+            
+            # --- CELEBRATION & REMARKS LOGIC ---
             if not st.session_state.snow_triggered:
                 if percent == 100: st.balloons()
                 elif percent >= 70: st.snow()
                 st.session_state.snow_triggered = True
+
             st.metric("Final Accuracy", f"{int(percent)}%")
+            
+            if percent == 100:
+                st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
+            elif percent >= 70:
+                st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
+            else:
+                st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
+            
+            # Additional Scorecard breakdown
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Correct", f"{st.session_state.score}")
+            col2.metric("Target", "7/7")
+            col3.metric("Level", difficulty)
+
+            st.markdown("---")
             if st.button("🔄 Restart Quiz"):
                 st.session_state.quiz_set = []
                 st.session_state.quiz_complete = False
@@ -198,8 +216,11 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 del st.session_state.failed_concept
                 st.rerun()
 
-        for msg in st.session_state[chat_key]:
-            st.chat_message(msg["role"]).write(msg["content"])
+        # Chat history container
+        chat_container = st.container()
+        with chat_container:
+            for msg in st.session_state[chat_key]:
+                st.chat_message(msg["role"]).write(msg["content"])
 
         if prompt := st.chat_input("Ask about this course..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
@@ -212,7 +233,7 @@ else:
     st.title(selected_course)
     st.warning("🚀 This course is launching soon!")
 
-# --- FOOTER: BRANDING RESTORED ---
+# --- FOOTER: BRANDING ---
 st.markdown("---") 
 st.markdown(
     """
@@ -222,4 +243,4 @@ st.markdown(
     </div>
     """, 
     unsafe_allow_html=True
-        )
+)
