@@ -112,6 +112,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.session_state.score = 0
             st.session_state.quiz_complete = False
             st.session_state.answered = False 
+            st.session_state.snow_triggered = False # Added to prevent repeating snow
 
         # 2. GENERATE / RESTART LOGIC
         if st.button("🚀 Generate New 7-Question Set"):
@@ -130,6 +131,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.session_state.score = 0
                 st.session_state.quiz_complete = False
                 st.session_state.answered = False
+                st.session_state.snow_triggered = False # Reset for new set
                 st.rerun()
 
         if not st.session_state.quiz_set and not st.session_state.quiz_complete:
@@ -185,11 +187,18 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         # 4. FINAL RESULTS
         elif st.session_state.quiz_complete:
             percent = (st.session_state.score / 7) * 100
+            
+            # CELEBRATION TRIGGER (Run only once)
+            if not st.session_state.snow_triggered:
+                if percent == 100:
+                    st.balloons()
+                elif percent >= 70:
+                    st.snow()
+                st.session_state.snow_triggered = True
+
             if percent == 100:
-                st.balloons()
                 st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
             elif percent >= 70:
-                st.snow()
                 st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
             else:
                 st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
@@ -208,20 +217,18 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                             del st.session_state[key]
                     st.session_state.quiz_set = []
                     st.session_state.quiz_complete = False
+                    st.session_state.snow_triggered = False
                     st.rerun()
             with c2:
                 st.write("Need help? Head to the **Socratic Tutor** tab!")
 
     # --- TAB 3: SOCRATIC TUTOR ---
-    # --- TAB 3: SOCRATIC TUTOR ---
     with tab3:
         st.subheader("🎓 Socratic Mentor")
         
-        # 1. Initialize Chat History
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
-        # 2. Logic Gap Detection (Silent Background Bridge)
         if "failed_concept" in st.session_state:
             st.info("💡 A logic gap was detected from your last exam. Would you like to review it?")
             if st.button("Coach me on this"):
@@ -232,34 +239,22 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         "Start a Socratic dialogue to help them find the logic without giving the answer."
                     )
                     response = model.generate_content(gap_prompt)
-                    # We add only the AI response so the student doesn't see the system prompt
                     st.session_state.messages.append({"role": "assistant", "content": response.text})
                     del st.session_state.failed_concept
                     st.rerun()
 
-        # 3. Display Conversation History (Above the input)
-        # Using a container ensures the chat looks organized
         chat_container = st.container()
         with chat_container:
             for msg in st.session_state.messages:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-        # 4. Sticky Chat Input (Appears at the bottom of the tab)
         if prompt := st.chat_input("Ask Radar a question..."):
-            # Add user message to state
             st.session_state.messages.append({"role": "user", "content": prompt})
-            
-            # Generate AI response
             context = active_unit_context if access_mode == "Premium (Custom Radar)" else selected_course
             full_prompt = f"System: Socratic Tutor for {context}. Lead the student to the answer. \nStudent: {prompt}"
-            
             response = model.generate_content(full_prompt)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
-            
-            # Refresh to show new messages immediately
             st.rerun()
-
-                    
 
 else:
     st.title(selected_course)
@@ -276,4 +271,3 @@ st.markdown(
     """, 
     unsafe_allow_html=True
     )
-
