@@ -6,7 +6,7 @@ import io
 
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- HELPERS ---
 def extract_text_from_pdf(uploaded_file):
@@ -251,3 +251,4 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown('<div style="text-align: center;"><p style="color: gray;">© 2026 Radar Grad-Tutors</p></div>', unsafe_allow_html=True)
+
