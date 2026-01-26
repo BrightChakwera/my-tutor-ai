@@ -242,4 +242,18 @@ else:
 
 # --- FOOTER ---
 st.markdown("---") 
-st.markdown("<div style='text-align: center; color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors</div>", unsafe_allow_html=True)
+
+st.markdown(
+
+    """
+
+    <div style="text-align: center;">
+
+        <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
+
+        <p style="color: #444444; font-style: italic; font-weight: 500; font-size: 1.1em;">"Detecting Gaps, Delivering Grades"</p>
+
+    </div>
+
+    """, unsafe_allow_html=True)
+
