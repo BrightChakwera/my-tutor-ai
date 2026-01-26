@@ -29,6 +29,19 @@ course_list = [
 ]
 
 selected_course = st.sidebar.selectbox("Choose a Course:", course_list)
+
+# --- COURSE SWITCHER LOGIC ---
+# If the user changes courses, clear the quiz and flags to prevent data leakage
+if "last_selected_course" not in st.session_state:
+    st.session_state.last_selected_course = selected_course
+
+if st.session_state.last_selected_course != selected_course:
+    st.session_state.quiz_set = []
+    st.session_state.quiz_complete = False
+    st.session_state.last_selected_course = selected_course
+    if "failed_concept" in st.session_state:
+        del st.session_state.failed_concept
+
 selected_module = "General Module"
 active_unit_context = "" 
 
@@ -105,16 +118,14 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             key="exam_diff"
         )
 
-        # 1. Initialize states
         if "quiz_set" not in st.session_state:
             st.session_state.quiz_set = []
             st.session_state.current_idx = 0
             st.session_state.score = 0
             st.session_state.quiz_complete = False
             st.session_state.answered = False 
-            st.session_state.snow_triggered = False # Added to prevent repeating snow
+            st.session_state.snow_triggered = False 
 
-        # 2. GENERATE / RESTART LOGIC
         if st.button("🚀 Generate New 7-Question Set"):
             with st.spinner("Drafting...will be ready in seconds"):
                 json_prompt = (
@@ -131,25 +142,15 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.session_state.score = 0
                 st.session_state.quiz_complete = False
                 st.session_state.answered = False
-                st.session_state.snow_triggered = False # Reset for new set
+                st.session_state.snow_triggered = False 
                 st.rerun()
 
-        if not st.session_state.quiz_set and not st.session_state.quiz_complete:
-            st.write("---")
-            st.info("The Exam Hall is currently quiet. Adjust your difficulty above and tap the button to begin.")
-
-        # 3. QUIZ INTERFACE
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
             q_data = st.session_state.quiz_set[st.session_state.current_idx]
             st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
             st.info(q_data["question"])
             
-            user_choice = st.radio(
-                "Select your answer:", 
-                q_data["options"], 
-                key=f"q_{st.session_state.current_idx}",
-                disabled=st.session_state.answered
-            )
+            user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{st.session_state.current_idx}", disabled=st.session_state.answered)
 
             if not st.session_state.answered:
                 if st.button("Check Answer"):
@@ -166,10 +167,11 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state.score += 1
                         st.session_state[f"scored_{st.session_state.current_idx}"] = True
                 else:
-                    st.error(f"❌ **Incorrect.** You chose: {selected}")
+                    st.error(f"❌ **Incorrect.**")
                     st.success(f"💡 **The right answer was: {correct}** \n\n {q_data.get('explanation', '')}")
                     
                     st.session_state.failed_concept = {
+                        "course": selected_course,
                         "question": q_data["question"],
                         "wrong_ans": selected,
                         "right_ans": correct
@@ -184,76 +186,54 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state.quiz_complete = True
                         st.rerun()
 
-        # 4. FINAL RESULTS
         elif st.session_state.quiz_complete:
             percent = (st.session_state.score / 7) * 100
-            
-            # CELEBRATION TRIGGER (Run only once)
             if not st.session_state.snow_triggered:
-                if percent == 100:
-                    st.balloons()
-                elif percent >= 70:
-                    st.snow()
+                if percent == 100: st.balloons()
+                elif percent >= 70: st.snow()
                 st.session_state.snow_triggered = True
 
-            if percent == 100:
-                st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
-            elif percent >= 70:
-                st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
-            else:
-                st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
+            st.metric("Final Accuracy", f"{int(percent)}%")
+            if st.button("🔄 Restart Quiz"):
+                st.session_state.quiz_set = []
+                st.session_state.quiz_complete = False
+                st.rerun()
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Correct", f"{st.session_state.score}")
-            col2.metric("Accuracy", f"{int(percent)}%")
-            col3.metric("Level", difficulty)
-
-            st.markdown("---")
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🔄 Restart with New Questions"):
-                    for key in list(st.session_state.keys()):
-                        if key.startswith("q_") or key.startswith("scored_"):
-                            del st.session_state[key]
-                    st.session_state.quiz_set = []
-                    st.session_state.quiz_complete = False
-                    st.session_state.snow_triggered = False
-                    st.rerun()
-            with c2:
-                st.write("Need help? Head to the **Socratic Tutor** tab!")
-
-    # --- TAB 3: SOCRATIC TUTOR ---
+    # --- TAB 3: SOCRATIC TUTOR (Course Specific) ---
     with tab3:
-        st.subheader("🎓 Socratic Mentor")
+        st.subheader(f"🎓 Socratic Mentor: {selected_course}")
         
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+        # Unique key for each course's chat
+        chat_key = f"messages_{selected_course}"
+        
+        if chat_key not in st.session_state:
+            st.session_state[chat_key] = []
 
-        if "failed_concept" in st.session_state:
-            st.info("💡 A logic gap was detected from your last exam. Would you like to review it?")
+        # Only show gap detection if it's for the CURRENT course
+        if "failed_concept" in st.session_state and st.session_state.failed_concept["course"] == selected_course:
+            st.info("💡 A logic gap was detected from your last exam. Review it?")
             if st.button("Coach me on this"):
-                with st.spinner("Preparing session..."):
+                with st.spinner("Preparing..."):
                     gap_prompt = (
-                        f"System Instruction: The student just missed: '{st.session_state.failed_concept['question']}'. "
+                        f"System: The student missed: '{st.session_state.failed_concept['question']}'. "
                         f"They chose '{st.session_state.failed_concept['wrong_ans']}' but the right answer is '{st.session_state.failed_concept['right_ans']}'. "
-                        "Start a Socratic dialogue to help them find the logic without giving the answer."
+                        "Lead them to the logic Socratically."
                     )
                     response = model.generate_content(gap_prompt)
-                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                    st.session_state[chat_key].append({"role": "assistant", "content": response.text})
                     del st.session_state.failed_concept
                     st.rerun()
 
-        chat_container = st.container()
-        with chat_container:
-            for msg in st.session_state.messages:
-                st.chat_message(msg["role"]).write(msg["content"])
+        # Display history for THIS course
+        for msg in st.session_state[chat_key]:
+            st.chat_message(msg["role"]).write(msg["content"])
 
-        if prompt := st.chat_input("Ask Radar a question..."):
-            st.session_state.messages.append({"role": "user", "content": prompt})
+        if prompt := st.chat_input("Ask about this course..."):
+            st.session_state[chat_key].append({"role": "user", "content": prompt})
             context = active_unit_context if access_mode == "Premium (Custom Radar)" else selected_course
-            full_prompt = f"System: Socratic Tutor for {context}. Lead the student to the answer. \nStudent: {prompt}"
+            full_prompt = f"System: Socratic Tutor for {context}. Lead to the answer. \nStudent: {prompt}"
             response = model.generate_content(full_prompt)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
 
 else:
@@ -262,12 +242,4 @@ else:
 
 # --- FOOTER ---
 st.markdown("---") 
-st.markdown(
-    """
-    <div style="text-align: center;">
-        <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
-        <p style="color: #444444; font-style: italic; font-weight: 500; font-size: 1.1em;">"Detecting Gaps, Delivering Grades"</p>
-    </div>
-    """, 
-    unsafe_allow_html=True
-    )
+st.markdown("<div style='text-align: center; color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors</div>", unsafe_allow_html=True)
