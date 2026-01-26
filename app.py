@@ -30,7 +30,7 @@ course_list = [
 
 selected_course = st.sidebar.selectbox("Choose a Course:", course_list)
 
-# --- COURSE SWITCHER LOGIC (Course Isolation) ---
+# --- COURSE SWITCHER LOGIC ---
 if "last_selected_course" not in st.session_state:
     st.session_state.last_selected_course = selected_course
 
@@ -78,15 +78,18 @@ else:
             active_unit_context = extract_text_from_pdf(unit_notes)
             st.sidebar.success("✅ Unit Content Ingested")
 
-# 3. MAIN ROUTING
-active_courses = ["College Algebra", "Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"]
+# 3. MAIN ROUTING (Restored Active Course Filter)
+active_courses = [
+    "Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", 
+    "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"
+]
 
+# Only allow entry if course is active OR user is in Premium mode
 if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     st.title(f"{selected_course if access_mode == 'Basic (Pre-built)' else 'Custom Radar Vault'}")
     
     tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
 
-    # --- TAB 1: LESSON HALL ---
     with tab1:
         if access_mode == "Basic (Pre-built)":
             st.subheader("Today's Learning Material")
@@ -97,18 +100,14 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             else:
                 st.video("https://youtu.be/i_bn4E9EK_Q?si=576fE6mF7isaCkQT")
             st.write(f"Exploring: {selected_module}")
-        
         elif access_mode == "Premium (Custom Radar)" and active_unit_context:
             st.subheader("📚 Your Personalized Radar Digest")
             if st.button("✨ Generate Unit Digest"):
                 with st.spinner("Designing Visual Notes..."):
-                    digest_prompt = (f"Using: {active_unit_context[:5000]}, create a structured study guide with high visual hierarchy.")
+                    digest_prompt = f"Using: {active_unit_context[:5000]}, create a structured study guide."
                     response = model.generate_content(digest_prompt)
                     st.markdown(response.text)
-        else:
-            st.info("Upload materials in the sidebar to generate your visual digest.")
 
-    # --- TAB 2: EXAM HALL ---
     with tab2:
         st.subheader("📝 Adaptive Exam Hall")
         difficulty = st.select_slider("Set Your Challenge Level:", options=["Foundational", "Intermediate", "Advanced"], key="exam_diff")
@@ -123,10 +122,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
 
         if st.button("🚀 Generate New 7-Question Set"):
             with st.spinner("Drafting...will be ready in seconds!"):
-                json_prompt = (
-                    f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
-                    "Output ONLY a JSON list of 7 objects: [{'question': '...', 'options': ['...', '...', '...', '...'], 'answer': '...', 'explanation': '...'}]"
-                )
+                json_prompt = f"Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. Return ONLY JSON."
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
                 st.session_state.quiz_set = json.loads(clean_json)
@@ -141,7 +137,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             q_data = st.session_state.quiz_set[st.session_state.current_idx]
             st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
             st.info(q_data["question"])
-            user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{st.session_state.current_idx}", disabled=st.session_state.answered)
+            user_choice = st.radio("Select answer:", q_data["options"], key=f"q_{st.session_state.current_idx}", disabled=st.session_state.answered)
 
             if not st.session_state.answered:
                 if st.button("Check Answer"):
@@ -158,7 +154,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state[f"scored_{st.session_state.current_idx}"] = True
                 else:
                     st.error(f"❌ **Incorrect.**")
-                    st.success(f"💡 **The right answer was: {correct}** \n\n {q_data.get('explanation', '')}")
+                    st.success(f"💡 **Right answer: {correct}**")
                     st.session_state.failed_concept = {"course": selected_course, "question": q_data["question"], "wrong_ans": selected, "right_ans": correct}
 
                 if st.button("Next Question ➡️"):
@@ -172,15 +168,12 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
 
         elif st.session_state.quiz_complete:
             percent = (st.session_state.score / 7) * 100
-            
-            # --- CELEBRATION & REMARKS LOGIC ---
             if not st.session_state.snow_triggered:
                 if percent == 100: st.balloons()
                 elif percent >= 70: st.snow()
                 st.session_state.snow_triggered = True
 
             st.metric("Final Accuracy", f"{int(percent)}%")
-            
             if percent == 100:
                 st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
             elif percent >= 70:
@@ -188,19 +181,11 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             else:
                 st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
             
-            # Additional Scorecard breakdown
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Correct", f"{st.session_state.score}")
-            col2.metric("Target", "7/7")
-            col3.metric("Level", difficulty)
-
-            st.markdown("---")
             if st.button("🔄 Restart Quiz"):
                 st.session_state.quiz_set = []
                 st.session_state.quiz_complete = False
                 st.rerun()
 
-    # --- TAB 3: SOCRATIC TUTOR (Isolated by Course) ---
     with tab3:
         st.subheader(f"🎓 Socratic Mentor: {selected_course}")
         chat_key = f"messages_{selected_course}"
@@ -208,32 +193,31 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.session_state[chat_key] = []
 
         if "failed_concept" in st.session_state and st.session_state.failed_concept["course"] == selected_course:
-            st.info("💡 A logic gap was detected. Review it?")
+            st.info("💡 Logic gap detected. Review?")
             if st.button("Coach me on this"):
-                gap_prompt = f"Lead the student to the logic for: {st.session_state.failed_concept['question']} Socratically."
+                gap_prompt = f"Socratically lead the student to understand: {st.session_state.failed_concept['question']}"
                 response = model.generate_content(gap_prompt)
                 st.session_state[chat_key].append({"role": "assistant", "content": response.text})
                 del st.session_state.failed_concept
                 st.rerun()
 
-        # Chat history container
-        chat_container = st.container()
-        with chat_container:
+        chat_display = st.container()
+        with chat_display:
             for msg in st.session_state[chat_key]:
                 st.chat_message(msg["role"]).write(msg["content"])
 
-        if prompt := st.chat_input("Ask about this course..."):
+        if prompt := st.chat_input("Ask Radar..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
-            full_prompt = f"Socratic Tutor for {selected_course}. Lead to the answer. \nStudent: {prompt}"
-            response = model.generate_content(full_prompt)
+            response = model.generate_content(f"Socratic Tutor for {selected_course}: {prompt}")
             st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
 
+# 4. LAUNCHING SOON HANDLER
 else:
     st.title(selected_course)
-    st.warning("🚀 This course is launching soon!")
+    st.warning("🚀 This course is launching soon! Check back later for active modules.")
 
-# --- FOOTER: BRANDING ---
+# --- FOOTER ---
 st.markdown("---") 
 st.markdown(
     """
@@ -243,4 +227,4 @@ st.markdown(
     </div>
     """, 
     unsafe_allow_html=True
-)
+            )
