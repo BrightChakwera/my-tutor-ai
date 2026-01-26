@@ -30,8 +30,7 @@ course_list = [
 
 selected_course = st.sidebar.selectbox("Choose a Course:", course_list)
 
-# --- COURSE SWITCHER LOGIC ---
-# If the user changes courses, clear the quiz and flags to prevent data leakage
+# --- COURSE SWITCHER LOGIC (Course Isolation) ---
 if "last_selected_course" not in st.session_state:
     st.session_state.last_selected_course = selected_course
 
@@ -112,11 +111,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     # --- TAB 2: EXAM HALL ---
     with tab2:
         st.subheader("📝 Adaptive Exam Hall")
-        difficulty = st.select_slider(
-            "Set Your Challenge Level:",
-            options=["Foundational", "Intermediate", "Advanced"],
-            key="exam_diff"
-        )
+        difficulty = st.select_slider("Set Your Challenge Level:", options=["Foundational", "Intermediate", "Advanced"], key="exam_diff")
 
         if "quiz_set" not in st.session_state:
             st.session_state.quiz_set = []
@@ -127,16 +122,13 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.session_state.snow_triggered = False 
 
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting...will be ready in seconds"):
+            with st.spinner("Drafting..."):
                 json_prompt = (
                     f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
-                    "The 'answer' key must contain the EXACT string from the 'options' list. "
-                    "Include a 'brief_explanation' (max 15 words) for the correct answer. "
                     "Output ONLY a JSON list of 7 objects: [{'question': '...', 'options': ['...', '...', '...', '...'], 'answer': '...', 'explanation': '...'}]"
                 )
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
-                
                 st.session_state.quiz_set = json.loads(clean_json)
                 st.session_state.current_idx = 0
                 st.session_state.score = 0
@@ -149,7 +141,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             q_data = st.session_state.quiz_set[st.session_state.current_idx]
             st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
             st.info(q_data["question"])
-            
             user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{st.session_state.current_idx}", disabled=st.session_state.answered)
 
             if not st.session_state.answered:
@@ -160,7 +151,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             if st.session_state.answered:
                 selected = str(user_choice).strip()
                 correct = str(q_data["answer"]).strip()
-
                 if selected == correct:
                     st.success(f"✅ **Correct!** {q_data.get('explanation', '')}")
                     if f"scored_{st.session_state.current_idx}" not in st.session_state:
@@ -169,13 +159,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 else:
                     st.error(f"❌ **Incorrect.**")
                     st.success(f"💡 **The right answer was: {correct}** \n\n {q_data.get('explanation', '')}")
-                    
-                    st.session_state.failed_concept = {
-                        "course": selected_course,
-                        "question": q_data["question"],
-                        "wrong_ans": selected,
-                        "right_ans": correct
-                    }
+                    st.session_state.failed_concept = {"course": selected_course, "question": q_data["question"], "wrong_ans": selected, "right_ans": correct}
 
                 if st.button("Next Question ➡️"):
                     if st.session_state.current_idx < 6:
@@ -192,46 +176,34 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 if percent == 100: st.balloons()
                 elif percent >= 70: st.snow()
                 st.session_state.snow_triggered = True
-
             st.metric("Final Accuracy", f"{int(percent)}%")
             if st.button("🔄 Restart Quiz"):
                 st.session_state.quiz_set = []
                 st.session_state.quiz_complete = False
                 st.rerun()
 
-    # --- TAB 3: SOCRATIC TUTOR (Course Specific) ---
+    # --- TAB 3: SOCRATIC TUTOR (Isolated by Course) ---
     with tab3:
         st.subheader(f"🎓 Socratic Mentor: {selected_course}")
-        
-        # Unique key for each course's chat
         chat_key = f"messages_{selected_course}"
-        
         if chat_key not in st.session_state:
             st.session_state[chat_key] = []
 
-        # Only show gap detection if it's for the CURRENT course
         if "failed_concept" in st.session_state and st.session_state.failed_concept["course"] == selected_course:
-            st.info("💡 A logic gap was detected from your last exam. Review it?")
+            st.info("💡 A logic gap was detected. Review it?")
             if st.button("Coach me on this"):
-                with st.spinner("Preparing..."):
-                    gap_prompt = (
-                        f"System: The student missed: '{st.session_state.failed_concept['question']}'. "
-                        f"They chose '{st.session_state.failed_concept['wrong_ans']}' but the right answer is '{st.session_state.failed_concept['right_ans']}'. "
-                        "Lead them to the logic Socratically."
-                    )
-                    response = model.generate_content(gap_prompt)
-                    st.session_state[chat_key].append({"role": "assistant", "content": response.text})
-                    del st.session_state.failed_concept
-                    st.rerun()
+                gap_prompt = f"Lead the student to the logic for: {st.session_state.failed_concept['question']} Socratically."
+                response = model.generate_content(gap_prompt)
+                st.session_state[chat_key].append({"role": "assistant", "content": response.text})
+                del st.session_state.failed_concept
+                st.rerun()
 
-        # Display history for THIS course
         for msg in st.session_state[chat_key]:
             st.chat_message(msg["role"]).write(msg["content"])
 
         if prompt := st.chat_input("Ask about this course..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
-            context = active_unit_context if access_mode == "Premium (Custom Radar)" else selected_course
-            full_prompt = f"System: Socratic Tutor for {context}. Lead to the answer. \nStudent: {prompt}"
+            full_prompt = f"Socratic Tutor for {selected_course}. Lead to the answer. \nStudent: {prompt}"
             response = model.generate_content(full_prompt)
             st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
@@ -240,20 +212,14 @@ else:
     st.title(selected_course)
     st.warning("🚀 This course is launching soon!")
 
-# --- FOOTER ---
+# --- FOOTER: BRANDING RESTORED ---
 st.markdown("---") 
-
 st.markdown(
-
     """
-
     <div style="text-align: center;">
-
         <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
-
         <p style="color: #444444; font-style: italic; font-weight: 500; font-size: 1.1em;">"Detecting Gaps, Delivering Grades"</p>
-
     </div>
-
-    """, unsafe_allow_html=True)
-
+    """, 
+    unsafe_allow_html=True
+        )
