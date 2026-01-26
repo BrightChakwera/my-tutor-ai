@@ -224,7 +224,7 @@ st.markdown(
     </div>
     """, 
     unsafe_allow_html=True
-        )response.text)
+        )write(esponse.text)
 
 else:
     st.title(selected_course)
@@ -241,4 +241,5 @@ st.markdown(
     """, 
     unsafe_allow_html=True
     )
+
 
