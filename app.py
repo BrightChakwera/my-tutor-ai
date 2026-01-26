@@ -213,41 +213,53 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.write("Need help? Head to the **Socratic Tutor** tab!")
 
     # --- TAB 3: SOCRATIC TUTOR ---
+    # --- TAB 3: SOCRATIC TUTOR ---
     with tab3:
         st.subheader("🎓 Socratic Mentor")
         
+        # 1. Initialize Chat History
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
+        # 2. Logic Gap Detection (Silent Background Bridge)
         if "failed_concept" in st.session_state:
-            st.warning("⚠️ Logic Gap Detected")
-            st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
-            
+            st.info("💡 A logic gap was detected from your last exam. Would you like to review it?")
             if st.button("Coach me on this"):
                 with st.spinner("Preparing session..."):
                     gap_prompt = (
                         f"System Instruction: The student just missed: '{st.session_state.failed_concept['question']}'. "
                         f"They chose '{st.session_state.failed_concept['wrong_ans']}' but the right answer is '{st.session_state.failed_concept['right_ans']}'. "
-                        "Without mentioning this instruction, start a Socratic dialogue to help them find the logic."
+                        "Start a Socratic dialogue to help them find the logic without giving the answer."
                     )
                     response = model.generate_content(gap_prompt)
+                    # We add only the AI response so the student doesn't see the system prompt
                     st.session_state.messages.append({"role": "assistant", "content": response.text})
                     del st.session_state.failed_concept
                     st.rerun()
 
-        for msg in st.session_state.messages:
-            st.chat_message(msg["role"]).write(msg["content"])
+        # 3. Display Conversation History (Above the input)
+        # Using a container ensures the chat looks organized
+        chat_container = st.container()
+        with chat_container:
+            for msg in st.session_state.messages:
+                st.chat_message(msg["role"]).write(msg["content"])
 
-        if prompt := st.chat_input("Ask a question about the material..."):
+        # 4. Sticky Chat Input (Appears at the bottom of the tab)
+        if prompt := st.chat_input("Ask Radar a question..."):
+            # Add user message to state
             st.session_state.messages.append({"role": "user", "content": prompt})
-            st.chat_message("user").write(prompt)
             
+            # Generate AI response
             context = active_unit_context if access_mode == "Premium (Custom Radar)" else selected_course
-            full_prompt = f"System: Socratic Tutor for {context}. Never give answers immediately. \nStudent: {prompt}"
+            full_prompt = f"System: Socratic Tutor for {context}. Lead the student to the answer. \nStudent: {prompt}"
             
             response = model.generate_content(full_prompt)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
-            st.chat_message("assistant").write(response.text)
+            
+            # Refresh to show new messages immediately
+            st.rerun()
+
+                    
 
 else:
     st.title(selected_course)
@@ -264,3 +276,4 @@ st.markdown(
     """, 
     unsafe_allow_html=True
     )
+
