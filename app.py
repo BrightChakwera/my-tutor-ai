@@ -174,9 +174,10 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.metric("Final Accuracy", f"{int((st.session_state.score/7)*100)}%")
             if st.button("🔄 Restart"):
                 st.session_state.quiz_set = []
+                st.session_state.quiz_complete = False
                 st.rerun()
 
-    # --- TAB 3: SOCRATIC TUTOR (The Re-Connected Mentor) ---
+    # --- TAB 3: SOCRATIC TUTOR ---
     with tab3:
         st.subheader("🎓 Socratic Mentor")
         
@@ -219,27 +220,9 @@ st.markdown("---")
 st.markdown(
     """
     <div style="text-align: center;">
-        <p style="color: gray;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
-        <p style="color: #444444; font-weight: bold; font-style: italic;">"Detecting Gaps, Delivering Grades"</p>
-    </div>
-    """, 
-    unsafe_allow_html=True
-        )write(esponse.text)
-
-else:
-    st.title(selected_course)
-    st.warning("🚀 This course is launching soon!")
-
-# --- FOOTER (The Signature) ---
-st.markdown("---") 
-st.markdown(
-    """
-    <div style="text-align: center;">
-        <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for University Students</p>
+        <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
         <p style="color: #444444; font-style: italic; font-weight: 500; font-size: 1.1em;">"Detecting Gaps, Delivering Grades"</p>
     </div>
     """, 
     unsafe_allow_html=True
     )
-
-
