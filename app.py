@@ -99,8 +99,13 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     # --- TAB 2: EXAM HALL ---
     with tab2:
         st.subheader("📝 Adaptive Exam Hall")
-        difficulty = st.select_slider("Challenge Level:", options=["Foundational", "Intermediate", "Advanced"], key="exam_diff")
+        difficulty = st.select_slider(
+            "Set Your Challenge Level:",
+            options=["Foundational", "Intermediate", "Advanced"],
+            key="exam_diff"
+        )
 
+        # 1. Initialize states
         if "quiz_set" not in st.session_state:
             st.session_state.quiz_set = []
             st.session_state.current_idx = 0
@@ -108,12 +113,18 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.session_state.quiz_complete = False
             st.session_state.answered = False 
 
+        # 2. GENERATE / RESTART LOGIC
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting...will be ready in seconds!"):
-                source = active_unit_context if access_mode == "Premium (Custom Radar)" else f"{selected_course} {selected_module}"
-                json_prompt = (f"Act as a professor for {selected_course}. Generate 7 MCQs on {source} at {difficulty} level. Output ONLY JSON.")
+            with st.spinner("Drafting...will be ready in seconds"):
+                json_prompt = (
+                    f"Act as a professor for {selected_course}. Generate 7 MCQs on {selected_module} at {difficulty} level. "
+                    "The 'answer' key must contain the EXACT string from the 'options' list. "
+                    "Include a 'brief_explanation' (max 15 words) for the correct answer. "
+                    "Output ONLY a JSON list of 7 objects: [{'question': '...', 'options': ['...', '...', '...', '...'], 'answer': '...', 'explanation': '...'}]"
+                )
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                
                 st.session_state.quiz_set = json.loads(clean_json)
                 st.session_state.current_idx = 0
                 st.session_state.score = 0
@@ -121,12 +132,22 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.session_state.answered = False
                 st.rerun()
 
+        if not st.session_state.quiz_set and not st.session_state.quiz_complete:
+            st.write("---")
+            st.info("The Exam Hall is currently quiet. Adjust your difficulty above and tap the button to begin.")
+
+        # 3. QUIZ INTERFACE
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
             q_data = st.session_state.quiz_set[st.session_state.current_idx]
             st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
             st.info(q_data["question"])
             
-            user_choice = st.radio("Select answer:", q_data["options"], key=f"q_{st.session_state.current_idx}", disabled=st.session_state.answered)
+            user_choice = st.radio(
+                "Select your answer:", 
+                q_data["options"], 
+                key=f"q_{st.session_state.current_idx}",
+                disabled=st.session_state.answered
+            )
 
             if not st.session_state.answered:
                 if st.button("Check Answer"):
@@ -134,17 +155,22 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                     st.rerun()
             
             if st.session_state.answered:
-                if str(user_choice).strip() == str(q_data["answer"]).strip():
-                    st.success(f"✅ Correct! {q_data.get('explanation', '')}")
+                selected = str(user_choice).strip()
+                correct = str(q_data["answer"]).strip()
+
+                if selected == correct:
+                    st.success(f"✅ **Correct!** {q_data.get('explanation', '')}")
                     if f"scored_{st.session_state.current_idx}" not in st.session_state:
                         st.session_state.score += 1
                         st.session_state[f"scored_{st.session_state.current_idx}"] = True
                 else:
-                    st.error(f"❌ Incorrect.")
+                    st.error(f"❌ **Incorrect.** You chose: {selected}")
+                    st.success(f"💡 **The right answer was: {correct}** \n\n {q_data.get('explanation', '')}")
+                    
                     st.session_state.failed_concept = {
                         "question": q_data["question"],
-                        "wrong_ans": user_choice,
-                        "right_ans": q_data["answer"]
+                        "wrong_ans": selected,
+                        "right_ans": correct
                     }
 
                 if st.button("Next Question ➡️"):
@@ -156,13 +182,35 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state.quiz_complete = True
                         st.rerun()
 
+        # 4. FINAL RESULTS
         elif st.session_state.quiz_complete:
-            st.balloons()
-            st.metric("Final Accuracy", f"{int((st.session_state.score/7)*100)}%")
-            if st.button("🔄 Restart"):
-                st.session_state.quiz_set = []
-                st.session_state.quiz_complete = False
-                st.rerun()
+            percent = (st.session_state.score / 7) * 100
+            if percent == 100:
+                st.balloons()
+                st.success("🏆 **PERFECT SCORE!** You have total mastery of this unit.")
+            elif percent >= 70:
+                st.snow()
+                st.info("📈 **GREAT JOB!** You've passed the Radar assessment.")
+            else:
+                st.warning("⚠️ **ROOM FOR GROWTH:** Use the Socratic Tutor to bridge your gaps.")
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Correct", f"{st.session_state.score}")
+            col2.metric("Accuracy", f"{int(percent)}%")
+            col3.metric("Level", difficulty)
+
+            st.markdown("---")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🔄 Restart with New Questions"):
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("q_") or key.startswith("scored_"):
+                            del st.session_state[key]
+                    st.session_state.quiz_set = []
+                    st.session_state.quiz_complete = False
+                    st.rerun()
+            with c2:
+                st.write("Need help? Head to the **Socratic Tutor** tab!")
 
     # --- TAB 3: SOCRATIC TUTOR ---
     with tab3:
@@ -215,4 +263,4 @@ st.markdown(
     </div>
     """, 
     unsafe_allow_html=True
-        )
+    )
