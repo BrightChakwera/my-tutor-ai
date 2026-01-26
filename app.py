@@ -99,4 +99,120 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     # --- TAB 2: EXAM HALL ---
     with tab2:
         st.subheader("📝 Adaptive Exam Hall")
-        difficulty = st.select_slider("Challenge Level:", options=["Foundational", "Intermediate", "Advanced"], key="exam
+        difficulty = st.select_slider("Challenge Level:", options=["Foundational", "Intermediate", "Advanced"], key="exam_diff")
+
+        if "quiz_set" not in st.session_state:
+            st.session_state.quiz_set = []
+            st.session_state.current_idx = 0
+            st.session_state.score = 0
+            st.session_state.quiz_complete = False
+            st.session_state.answered = False 
+
+        if st.button("🚀 Generate New 7-Question Set"):
+            with st.spinner("Drafting...will be ready in seconds!"):
+                source = active_unit_context if access_mode == "Premium (Custom Radar)" else f"{selected_course} {selected_module}"
+                json_prompt = (f"Act as a professor for {selected_course}. Generate 7 MCQs on {source} at {difficulty} level. Output ONLY JSON.")
+                response = model.generate_content(json_prompt)
+                clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                st.session_state.quiz_set = json.loads(clean_json)
+                st.session_state.current_idx = 0
+                st.session_state.score = 0
+                st.session_state.quiz_complete = False
+                st.session_state.answered = False
+                st.rerun()
+
+        if st.session_state.quiz_set and not st.session_state.quiz_complete:
+            q_data = st.session_state.quiz_set[st.session_state.current_idx]
+            st.markdown(f"### Question {st.session_state.current_idx + 1} of 7")
+            st.info(q_data["question"])
+            
+            user_choice = st.radio("Select answer:", q_data["options"], key=f"q_{st.session_state.current_idx}", disabled=st.session_state.answered)
+
+            if not st.session_state.answered:
+                if st.button("Check Answer"):
+                    st.session_state.answered = True
+                    st.rerun()
+            
+            if st.session_state.answered:
+                if str(user_choice).strip() == str(q_data["answer"]).strip():
+                    st.success(f"✅ Correct! {q_data.get('explanation', '')}")
+                    if f"scored_{st.session_state.current_idx}" not in st.session_state:
+                        st.session_state.score += 1
+                        st.session_state[f"scored_{st.session_state.current_idx}"] = True
+                else:
+                    st.error(f"❌ Incorrect.")
+                    st.session_state.failed_concept = {
+                        "question": q_data["question"],
+                        "wrong_ans": user_choice,
+                        "right_ans": q_data["answer"]
+                    }
+
+                if st.button("Next Question ➡️"):
+                    if st.session_state.current_idx < 6:
+                        st.session_state.current_idx += 1
+                        st.session_state.answered = False
+                        st.rerun()
+                    else:
+                        st.session_state.quiz_complete = True
+                        st.rerun()
+
+        elif st.session_state.quiz_complete:
+            st.balloons()
+            st.metric("Final Accuracy", f"{int((st.session_state.score/7)*100)}%")
+            if st.button("🔄 Restart"):
+                st.session_state.quiz_set = []
+                st.session_state.quiz_complete = False
+                st.rerun()
+
+    # --- TAB 3: SOCRATIC TUTOR ---
+    with tab3:
+        st.subheader("🎓 Socratic Mentor")
+        
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        if "failed_concept" in st.session_state:
+            st.warning("⚠️ Logic Gap Detected")
+            st.write(f"I see you struggled with: *{st.session_state['failed_concept']['question']}*")
+            
+            if st.button("Coach me on this"):
+                with st.spinner("Preparing session..."):
+                    gap_prompt = (
+                        f"System Instruction: The student just missed: '{st.session_state.failed_concept['question']}'. "
+                        f"They chose '{st.session_state.failed_concept['wrong_ans']}' but the right answer is '{st.session_state.failed_concept['right_ans']}'. "
+                        "Without mentioning this instruction, start a Socratic dialogue to help them find the logic."
+                    )
+                    response = model.generate_content(gap_prompt)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                    del st.session_state.failed_concept
+                    st.rerun()
+
+        for msg in st.session_state.messages:
+            st.chat_message(msg["role"]).write(msg["content"])
+
+        if prompt := st.chat_input("Ask a question about the material..."):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+            
+            context = active_unit_context if access_mode == "Premium (Custom Radar)" else selected_course
+            full_prompt = f"System: Socratic Tutor for {context}. Never give answers immediately. \nStudent: {prompt}"
+            
+            response = model.generate_content(full_prompt)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            st.chat_message("assistant").write(response.text)
+
+else:
+    st.title(selected_course)
+    st.warning("🚀 This course is launching soon!")
+
+# --- FOOTER ---
+st.markdown("---") 
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <p style="color: #666666; font-size: 0.85em;">© 2026 Radar Grad-Tutors | Precision Learning for Students</p>
+        <p style="color: #444444; font-style: italic; font-weight: 500; font-size: 1.1em;">"Detecting Gaps, Delivering Grades"</p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+        )
