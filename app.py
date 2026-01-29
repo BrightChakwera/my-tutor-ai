@@ -169,10 +169,25 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.session_state.quiz_complete = False
                 st.rerun()
 
-    with tab3:
-        st.subheader("🎓 Socratic Mentor")
-        # Tutor logic remains the same...
-        st.write("Ready to bridge those logic gaps?")
+with tab3:
+        st.subheader(f"🎓 Socratic Mentor: {selected_course}")
+        chat_key = f"messages_{selected_course}"
+        if chat_key not in st.session_state: st.session_state[chat_key] = []
+
+        if "failed_concept" in st.session_state and st.session_state.failed_concept["course"] == selected_course:
+            st.info("💡 Logic gap detected. Review?")
+            if st.button("Coach me on this"):
+                gap_prompt = f"Socratically lead the student to understand: {st.session_state.failed_concept['question']}"
+                st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
+                del st.session_state.failed_concept
+                st.rerun()
+
+        for msg in st.session_state[chat_key]: st.chat_message(msg["role"]).write(msg["content"])
+        if prompt := st.chat_input("Ask Radar..."):
+            st.session_state[chat_key].append({"role": "user", "content": prompt})
+            response = model.generate_content(f"Socratic Tutor for {selected_course}: {prompt}")
+            st.session_state[chat_key].append({"role": "assistant", "content": response.text})
+            st.rerun()
 
 else:
     st.title(selected_course)
@@ -181,3 +196,4 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
+
