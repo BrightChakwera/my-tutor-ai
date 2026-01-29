@@ -98,7 +98,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         elif access_mode == "Premium (Custom Radar)":
             syllabus_file = st.sidebar.file_uploader("📂 Course Outline", type=["pdf"], key="syllabus_up")
             if syllabus_file and st.button("✨ Generate Unit Digest"):
-                # Logic for custom digest generation would go here
                 st.info("Mapping curriculum from uploaded file...")
 
     with tab2:
@@ -141,7 +140,8 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                     if st.session_state.current_idx < (len(st.session_state.quiz_set) - 1):
                         st.session_state.current_idx += 1
                         st.session_state.answered = False
-                    else: st.session_state.quiz_complete = True
+                    else: 
+                        st.session_state.quiz_complete = True
                     st.rerun()
 
         elif st.session_state.quiz_complete:
@@ -150,16 +150,17 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.subheader("🏁 Performance Scorecard")
             st.metric("Final Accuracy", f"{percent}%")
             
-            # Re-incorporating the Branding Comment
             st.markdown(f"### *\"Detecting Gaps, Delivering Grades.\"*")
             
-            if percent == 100: st.success("🏆 PERFECT SCORE! Mastery achieved.")
+            if percent == 100: 
+                st.success("🏆 PERFECT SCORE! Mastery achieved.")
             elif percent >= 70: 
                 st.info("📈 GREAT JOB! Assessment passed.")
                 if not st.session_state.snow_triggered:
                     st.snow()
                     st.session_state.snow_triggered = True
-            else: st.warning("⚠️ ROOM FOR GROWTH: Review your failed concepts in the Socratic Tutor.")
+            else: 
+                st.warning("⚠️ ROOM FOR GROWTH: Review your failed concepts in the Socratic Tutor.")
             
             pdf_data = create_pdf_report(selected_course, st.session_state.score, difficulty, percent)
             st.download_button("📥 Download PDF Report", data=pdf_data, file_name=f"Radar_Report.pdf", mime="application/pdf")
@@ -169,7 +170,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 st.session_state.quiz_complete = False
                 st.rerun()
 
-with tab3:
+    with tab3:
         st.subheader(f"🎓 Socratic Mentor: {selected_course}")
         chat_key = f"messages_{selected_course}"
         if chat_key not in st.session_state: st.session_state[chat_key] = []
@@ -182,7 +183,9 @@ with tab3:
                 del st.session_state.failed_concept
                 st.rerun()
 
-        for msg in st.session_state[chat_key]: st.chat_message(msg["role"]).write(msg["content"])
+        for msg in st.session_state[chat_key]:
+            st.chat_message(msg["role"]).write(msg["content"])
+        
         if prompt := st.chat_input("Ask Radar..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
             response = model.generate_content(f"Socratic Tutor for {selected_course}: {prompt}")
@@ -196,4 +199,3 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
-
