@@ -38,6 +38,7 @@ st.sidebar.title("🛰️ Radar Grad-Tutors")
 
 access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
+# Full Catalog
 course_list = [
     "College Algebra", "Elementary Calculus", "Elementary Microeconomics", 
     "Elementary Macroeconomics", "Mathematics for Economists",
@@ -100,9 +101,14 @@ else:
             active_unit_context = extract_text_from_pdf(unit_notes)
             st.sidebar.success("✅ Content Ingested")
 
-# 3. MAIN ROUTING
-active_courses = ["College Algebra", "Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2", "Elementary Microeconomics"]
+# 3. MAIN ROUTING (Categorization Logic)
+active_courses = [
+    "College Algebra", "Elementary Calculus", "Elementary Macroeconomics", 
+    "Intermediate Macroeconomics", "Statistics for Social Scientist", 
+    "Econometrics 2", "Elementary Microeconomics"
+]
 
+# If course is active OR user is using Premium Radar, show content
 if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     st.title(f"{selected_course if access_mode == 'Basic (Pre-built)' else 'Custom Radar Vault'}")
     tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
@@ -175,7 +181,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             elif percent >= 70: st.info("📈 GREAT JOB! Assessment passed.")
             else: st.warning("⚠️ ROOM FOR GROWTH: Use the Socratic Tutor.")
             
-            # --- UPDATED PDF DOWNLOAD LOGIC ---
+            # PDF Report Generation
             pdf_data = create_pdf_report(selected_course, st.session_state.score, difficulty, percent)
             st.download_button(
                 label="📥 Download PDF Scorecard",
@@ -208,9 +214,11 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             response = model.generate_content(f"Socratic Tutor for {selected_course}: {prompt}")
             st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
+
+# 4. LAUNCHING SOON HANDLER (Category Separation)
 else:
     st.title(selected_course)
-    st.warning("🚀 This course is launching soon!")
+    st.warning("🚀 This course is launching soon! Check back later for active modules.")
 
 # --- FOOTER ---
 st.markdown("---") 
