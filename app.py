@@ -54,7 +54,6 @@ if "answered" not in st.session_state: st.session_state.answered = False
 if "snow_triggered" not in st.session_state: st.session_state.snow_triggered = False
 if "last_selected_course" not in st.session_state: st.session_state.last_selected_course = selected_course
 
-# Course Switcher Logic
 if st.session_state.last_selected_course != selected_course:
     st.session_state.quiz_set = []
     st.session_state.quiz_complete = False
@@ -107,20 +106,30 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         if st.button("🚀 Generate New 7-Question Set"):
             with st.spinner("Drafting...will be ready in seconds!"):
                 json_prompt = f"""Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. 
-                Return ONLY a JSON list of objects with keys: "question", "options" (list of strings), "answer" (the exact string from options), and "explanation"."""
+                Return ONLY a raw JSON list of objects. No markdown formatting. No backticks. 
+                Keys: "question", "options" (list of strings), "answer" (string), "explanation" (string)."""
+                
                 response = model.generate_content(json_prompt)
-                clean_json = response.text.replace("```json", "").replace("```", "").strip()
-                st.session_state.quiz_set = json.loads(clean_json)
-                st.session_state.current_idx, st.session_state.score = 0, 0
-                st.session_state.quiz_complete, st.session_state.answered, st.session_state.snow_triggered = False, False, False
-                st.rerun()
+                
+                # REFINED PARSING: Handles cases where AI still uses backticks
+                raw_text = response.text.replace("```json", "").replace("```", "").strip()
+                try:
+                    st.session_state.quiz_set = json.loads(raw_text)
+                    st.session_state.current_idx, st.session_state.score = 0, 0
+                    st.session_state.quiz_complete, st.session_state.answered, st.session_state.snow_triggered = False, False, False
+                    st.rerun()
+                except Exception as e:
+                    st.error("The AI generated a formatting error. Please try generating the set again.")
 
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
             idx = st.session_state.current_idx
             q_data = st.session_state.quiz_set[idx]
             st.markdown(f"### Question {idx + 1} of 7")
-            st.info(q_data["question"])
-            user_choice = st.radio("Select answer:", q_data["options"], key=f"q_{idx}")
+            
+            # LEGIBILITY FIX: Explicit string cast and clear markdown rendering
+            st.info(f"**{q_data.get('question', 'Loading question...')}**")
+            
+            user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{idx}")
 
             if not st.session_state.answered and st.button("Check Answer"):
                 st.session_state.answered = True
@@ -133,7 +142,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state.score += 1
                         st.session_state[f"scored_{idx}"] = True
                 else:
-                    st.error(f"❌ Incorrect. Right answer: {q_data['answer']}")
+                    st.error(f"❌ Incorrect. The correct answer was: {q_data['answer']}")
                     st.session_state.failed_concept = {"course": selected_course, "question": q_data["question"]}
 
                 if st.button("Next Question ➡️"):
@@ -149,13 +158,10 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.markdown("---")
             st.subheader("🏁 Performance Scorecard")
             st.metric("Final Accuracy", f"{percent}%")
-            
             st.markdown(f"### *\"Detecting Gaps, Delivering Grades.\"*")
             
-            if percent == 100: 
-                st.success("🏆 PERFECT SCORE! Mastery achieved.")
-            elif percent >= 70: 
-                st.info("📈 GREAT JOB! Assessment passed.")
+            if percent >= 70: 
+                st.success("📈 GREAT JOB! Assessment passed.")
                 if not st.session_state.snow_triggered:
                     st.snow()
                     st.session_state.snow_triggered = True
