@@ -79,8 +79,14 @@ if access_mode == "Basic (Pre-built)":
     elif selected_course == "Elementary Macroeconomics":
         modules = ["Unit 1: GDP & Growth", "Unit 2: Inflation", "Unit 3: Fiscal Policy"]
         selected_module = st.sidebar.radio("Course Curriculum:", modules)
-    elif selected_course == "Elementary Microeconomics":
-        modules = ["Unit 1: Supply & Demand", "Unit 2: Elasticity", "Unit 3: Market Structures"]
+    elif selected_course == "Intermediate Macroeconomics":
+        modules = ["Unit 1: IS-LM Models", "Unit 2: Aggregate Supply", "Unit 3: Open Economy Macro"]
+        selected_module = st.sidebar.radio("Course Curriculum:", modules)
+    elif selected_course == "Statistics for Social Scientist":
+        modules = ["Unit 1: Probability", "Unit 2: Distributions", "Unit 3: Hypothesis Testing"]
+        selected_module = st.sidebar.radio("Course Curriculum:", modules)
+    elif selected_course == "Econometrics 2":
+        modules = ["Unit 1: Time Series", "Unit 2: Panel Data", "Unit 3: Limited Dependent Variables"]
         selected_module = st.sidebar.radio("Course Curriculum:", modules)
 
 # --- LOGIC FOR PREMIUM TIER ---
@@ -102,9 +108,12 @@ else:
             st.sidebar.success("✅ Content Ingested")
 
 # 3. MAIN ROUTING (Categorization Logic)
+# ONLY these courses will allow access to the Halls
 active_courses = [
-    ""Elementary Calculus", "Elementary Macroeconomics", 
-    "Intermediate Macroeconomics", "Statistics for Social Scientist", 
+    "Elementary Calculus", 
+    "Elementary Macroeconomics", 
+    "Intermediate Macroeconomics", 
+    "Statistics for Social Scientist", 
     "Econometrics 2"
 ]
 
@@ -130,7 +139,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         difficulty = st.select_slider("Difficulty:", options=["Foundational", "Intermediate", "Advanced"], key="exam_diff")
 
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting...will be redy in seconds!"):
+            with st.spinner("Drafting...will be ready in seconds!"):
                 json_prompt = f"Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. Return ONLY JSON list."
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
@@ -223,4 +232,3 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
-
