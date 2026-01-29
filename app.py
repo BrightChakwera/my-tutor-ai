@@ -103,9 +103,9 @@ else:
 
 # 3. MAIN ROUTING (Categorization Logic)
 active_courses = [
-    "College Algebra", "Elementary Calculus", "Elementary Macroeconomics", 
+    ""Elementary Calculus", "Elementary Macroeconomics", 
     "Intermediate Macroeconomics", "Statistics for Social Scientist", 
-    "Econometrics 2", "Elementary Microeconomics"
+    "Econometrics 2"
 ]
 
 # If course is active OR user is using Premium Radar, show content
@@ -130,7 +130,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         difficulty = st.select_slider("Difficulty:", options=["Foundational", "Intermediate", "Advanced"], key="exam_diff")
 
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting..."):
+            with st.spinner("Drafting...will be redy in seconds!"):
                 json_prompt = f"Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. Return ONLY JSON list."
                 response = model.generate_content(json_prompt)
                 clean_json = response.text.replace("```json", "").replace("```", "").strip()
@@ -223,3 +223,4 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
+
