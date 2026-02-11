@@ -34,7 +34,7 @@ def create_pdf_report(course, score, difficulty, percent):
     return pdf.output(dest='S').encode('latin-1')
 
 # 2. SIDEBAR
-st.sidebar.title("🛰️ Radar Grad-Tutors")
+st.sidebar.title("Radar Grad-Tutors")
 access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
 course_list = [
@@ -205,3 +205,4 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
+
