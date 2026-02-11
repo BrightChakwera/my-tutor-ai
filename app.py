@@ -181,10 +181,19 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         chat_key = f"messages_{selected_course}"
         if chat_key not in st.session_state: st.session_state[chat_key] = []
 
+        # System Instruction for the "Deep-Dive" Socratic Persona
+        socratic_system_prompt = (
+            "You are a brilliant academic mentor for Radar Grad-Tutors. "
+            "When explaining, do not use boring step-by-step lists. Instead, provide a full, "
+            "insightful, and comprehensive explanation in professional prose. "
+            "Narrate the logic and bridge the gap in understanding immediately. "
+            "Always end your deep-dive with one sharp, conceptual follow-up question to ensure absorption."
+        )
+
         if "failed_concept" in st.session_state and st.session_state.failed_concept["course"] == selected_course:
             st.info("💡 Logic gap detected. Review?")
             if st.button("Coach me on this"):
-                gap_prompt = f"Socratically lead the student to understand: {st.session_state.failed_concept['question']}"
+                gap_prompt = f"{socratic_system_prompt}\n\nA student just missed this question: {st.session_state.failed_concept['question']}. Narrate the full logical solution and explain the concept deeply."
                 st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
                 del st.session_state.failed_concept
                 st.rerun()
@@ -194,7 +203,8 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         
         if prompt := st.chat_input("Ask Radar..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
-            response = model.generate_content(f"Socratic Tutor for {selected_course}: {prompt}")
+            full_prompt = f"{socratic_system_prompt}\n\nCourse: {selected_course}\nStudent Question: {prompt}"
+            response = model.generate_content(full_prompt)
             st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
 
@@ -205,4 +215,3 @@ else:
 # --- FOOTER ---
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
-
