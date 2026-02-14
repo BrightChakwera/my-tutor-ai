@@ -53,7 +53,6 @@ if "quiz_complete" not in st.session_state: st.session_state.quiz_complete = Fal
 if "answered" not in st.session_state: st.session_state.answered = False
 if "snow_triggered" not in st.session_state: st.session_state.snow_triggered = False
 if "last_selected_course" not in st.session_state: st.session_state.last_selected_course = selected_course
-# Memory for missed questions
 if "missed_questions_queue" not in st.session_state: st.session_state.missed_questions_queue = []
 
 if st.session_state.last_selected_course != selected_course:
@@ -113,7 +112,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 Keys: "question", "options" (list of strings), "answer" (string), "explanation" (string)."""
                 
                 response = model.generate_content(json_prompt)
-                
                 raw_text = response.text.replace("```json", "").replace("```", "").strip()
                 try:
                     st.session_state.quiz_set = json.loads(raw_text)
@@ -143,7 +141,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state[f"scored_{idx}"] = True
                 else:
                     st.error(f"❌ Incorrect. The correct answer was: {q_data['answer']}")
-                    # Memory logic: Add missed question to queue if not already there
                     missed_item = {
                         "course": selected_course, 
                         "question": q_data["question"],
@@ -196,16 +193,20 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             "to the student's chosen difficulty level."
         )
 
-        # Sequential Coaching Logic
+        # Sequential Coaching Logic with Enhanced Navigation
         if st.session_state.missed_questions_queue:
             count = len(st.session_state.missed_questions_queue)
-            st.info(f"💡 You have {count} logic gap(s) to review.")
+            st.info(f"💡 Logic Gaps Remaining: **{count}**")
             
-            # Get the first question in the queue
             current_gap = st.session_state.missed_questions_queue[0]
             curr_diff = current_gap.get("difficulty", "Foundational")
             
-            if st.button(f"Coach me on gap: {current_gap['question'][:50]}..."):
+            with st.expander("👉 Guidelines: How to proceed", expanded=True):
+                st.write("1. Click the button below to start coaching on the next missed logic gap.")
+                st.write("2. Use the chat box at the bottom if you want to dive deeper into the current gap.")
+                st.write("3. Once a gap is addressed, you can move to the next one.")
+
+            if st.button(f"🚀 Coach me on: {current_gap['question'][:60]}..."):
                 gap_prompt = (
                     f"{socratic_system_prompt}\n\n"
                     f"Difficulty Context: {curr_diff}\n"
@@ -214,14 +215,16 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                     f"{curr_diff} level."
                 )
                 st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
-                # Remove the question we just coached on
                 st.session_state.missed_questions_queue.pop(0)
                 st.rerun()
+        else:
+            st.success("🌟 All missed logic gaps have been reviewed!")
 
+        # Display Chat History
         for msg in st.session_state[chat_key]:
             st.chat_message(msg["role"]).write(msg["content"])
         
-        if prompt := st.chat_input("Ask Radar..."):
+        if prompt := st.chat_input("Ask Radar... (or continue current logic gap)"):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
             full_prompt = f"{socratic_system_prompt}\nDifficulty: {difficulty}\nCourse: {selected_course}\nUser: {prompt}"
             response = model.generate_content(full_prompt)
