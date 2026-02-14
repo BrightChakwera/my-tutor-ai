@@ -111,7 +111,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                 
                 response = model.generate_content(json_prompt)
                 
-                # REFINED PARSING: Handles cases where AI still uses backticks
                 raw_text = response.text.replace("```json", "").replace("```", "").strip()
                 try:
                     st.session_state.quiz_set = json.loads(raw_text)
@@ -126,7 +125,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             q_data = st.session_state.quiz_set[idx]
             st.markdown(f"### Question {idx + 1} of 7")
             
-            # LEGIBILITY FIX: Explicit string cast and clear markdown rendering
             st.info(f"**{q_data.get('question', 'Loading question...')}**")
             
             user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{idx}")
@@ -143,7 +141,12 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state[f"scored_{idx}"] = True
                 else:
                     st.error(f"❌ Incorrect. The correct answer was: {q_data['answer']}")
-                    st.session_state.failed_concept = {"course": selected_course, "question": q_data["question"]}
+                    # Store both course and current difficulty for the tutor
+                    st.session_state.failed_concept = {
+                        "course": selected_course, 
+                        "question": q_data["question"],
+                        "difficulty": difficulty
+                    }
 
                 if st.button("Next Question ➡️"):
                     if st.session_state.current_idx < (len(st.session_state.quiz_set) - 1):
@@ -181,19 +184,26 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         chat_key = f"messages_{selected_course}"
         if chat_key not in st.session_state: st.session_state[chat_key] = []
 
-        # System Instruction for the "Deep-Dive" Socratic Persona
+        # UPDATED SYSTEM INSTRUCTION: Focus on brevity and difficulty alignment
         socratic_system_prompt = (
-            "You are a brilliant academic mentor for Radar Grad-Tutors. "
-            "When explaining, do not use boring step-by-step lists. Instead, provide a full, "
-            "insightful, and comprehensive explanation in professional prose. "
-            "Narrate the logic and bridge the gap in understanding immediately. "
-            "Always end your deep-dive with one sharp, conceptual follow-up question to ensure absorption."
+            "You are a brilliant academic mentor. Be as brief and concise as possible. "
+            "Explain the logic in short, high-impact prose without step-by-step lists. "
+            "Address the logic gap immediately. "
+            "Always end with one sharp conceptual question that is specifically calibrated "
+            "to the student's chosen difficulty level."
         )
 
         if "failed_concept" in st.session_state and st.session_state.failed_concept["course"] == selected_course:
-            st.info("💡 Logic gap detected. Review?")
+            curr_diff = st.session_state.failed_concept.get("difficulty", "Foundational")
+            st.info(f"💡 Logic gap detected (Level: {curr_diff}). Review?")
             if st.button("Coach me on this"):
-                gap_prompt = f"{socratic_system_prompt}\n\nA student just missed this question: {st.session_state.failed_concept['question']}. Narrate the full logical solution and explain the concept deeply."
+                gap_prompt = (
+                    f"{socratic_system_prompt}\n\n"
+                    f"Difficulty Context: {curr_diff}\n"
+                    f"Question Missed: {st.session_state.failed_concept['question']}\n\n"
+                    "Provide a very brief explanation and one follow-up question at the "
+                    f"{curr_diff} level."
+                )
                 st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
                 del st.session_state.failed_concept
                 st.rerun()
@@ -203,7 +213,8 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         
         if prompt := st.chat_input("Ask Radar..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
-            full_prompt = f"{socratic_system_prompt}\n\nCourse: {selected_course}\nStudent Question: {prompt}"
+            # Default to Advanced for general chat or use the current slider state
+            full_prompt = f"{socratic_system_prompt}\nDifficulty: {difficulty}\nCourse: {selected_course}\nUser: {prompt}"
             response = model.generate_content(full_prompt)
             st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
