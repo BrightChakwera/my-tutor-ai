@@ -15,9 +15,10 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    # Ensure users table exists
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, password TEXT)''')
-    # Table to track which user has access to which course
+    # Ensure enrollments table exists
     c.execute('''CREATE TABLE IF NOT EXISTS enrollments 
                  (username TEXT, course TEXT, PRIMARY KEY (username, course))''')
     conn.commit()
@@ -165,7 +166,6 @@ if st.sidebar.button("Logout"):
 
 access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
-# Define Master Course List
 course_list = [
     "College Algebra", "Elementary Calculus", "Elementary Microeconomics", 
     "Elementary Macroeconomics", "Mathematics for Economists",
@@ -173,13 +173,11 @@ course_list = [
     "Intermediate Macroeconomics", "Econometrics 1", "Econometrics 2"
 ]
 
-# Filter list based on user enrollments
 user_enrolled_courses = get_user_courses(st.session_state.user_name)
 
 if user_enrolled_courses:
     selected_course = st.sidebar.selectbox("Choose a Course:", user_enrolled_courses)
 else:
-    st.info("Please enroll in a course via the 'Course Manager' tab to begin.")
     selected_course = None
 
 # --- SESSION STATE ---
@@ -205,7 +203,6 @@ if st.session_state.last_selected_course != selected_course:
 selected_module = "General Module"
 
 # --- MAIN INTERFACE TABS ---
-# Adding a "Course Manager" tab so users can enroll/add courses
 main_tabs = st.tabs(["📚 My Courses", "🛒 Course Manager"])
 
 with main_tabs[1]:
@@ -220,7 +217,6 @@ with main_tabs[1]:
 
 with main_tabs[0]:
     if selected_course:
-        # --- BASIC TIER CURRICULUM LOGIC ---
         if access_mode == "Basic (Pre-built)":
             if selected_course == "Elementary Calculus":
                 modules = ["Unit 1: Limits & Continuity", "Unit 2: Derivatives", "Unit 3: Integration"]
@@ -238,7 +234,6 @@ with main_tabs[0]:
                 modules = ["Unit 1: Time Series", "Unit 2: Panel Data", "Unit 3: Limited Dependent Variables"]
                 selected_module = st.sidebar.radio("Course Curriculum:", modules)
 
-        # --- MAIN ROUTING ---
         active_courses = ["Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2"]
 
         if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
@@ -343,7 +338,7 @@ with main_tabs[0]:
         else:
             st.warning("🚀 This course is launching soon!")
     else:
-        st.write("Navigate to 'Course Manager' to add courses to your vault.")
+        st.info("Navigate to 'Course Manager' to add courses to your vault.")
 
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors</p></div>", unsafe_allow_html=True)
