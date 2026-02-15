@@ -9,6 +9,46 @@ from fpdf import FPDF
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel('gemini-2.5-flash')
 
+# --- AUTHENTICATION SYSTEM ---
+def login_page():
+    st.title("🔐 Radar Grad-Tutors: Login")
+    st.markdown("---")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Credential Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if username == "student" and password == "radar2026": # Demo credentials
+                st.session_state.logged_in = True
+                st.session_state.user_name = username
+                st.rerun()
+            else:
+                st.error("Invalid credentials.")
+
+    with col2:
+        st.subheader("Social Login")
+        st.info("Quick access via verified accounts")
+        if st.button("🔴 Continue with Google"):
+            # Simulation: In a production app, you'd use streamlit-google-auth here
+            st.session_state.logged_in = True
+            st.session_state.user_name = "Google_User"
+            st.rerun()
+        if st.button("🔵 Continue with LinkedIn"):
+            st.session_state.logged_in = True
+            st.session_state.user_name = "LinkedIn_User"
+            st.rerun()
+
+# --- AUTH INITIALIZATION ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    login_page()
+    st.stop() # Stops the rest of the app from running until logged in
+
 # --- HELPERS ---
 def extract_text_from_pdf(uploaded_file):
     with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
@@ -35,6 +75,11 @@ def create_pdf_report(course, score, difficulty, percent):
 
 # 2. SIDEBAR
 st.sidebar.title("Radar Grad-Tutors")
+st.sidebar.write(f"Welcome, **{st.session_state.user_name}**!")
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.rerun()
+
 access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
 course_list = [
@@ -162,7 +207,6 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             st.markdown("---")
             st.subheader("🏁 Performance Scorecard")
             st.metric("Final Accuracy", f"{percent}%")
-            st.markdown(f"### *\"Detecting Gaps, Delivering Grades.\"*")
             
             if percent >= 70: 
                 st.success("📈 GREAT JOB! Assessment passed.")
@@ -187,13 +231,9 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
 
         socratic_system_prompt = (
             "You are a brilliant academic mentor. Be as brief and concise as possible. "
-            "Explain the logic in short, high-impact prose without step-by-step lists. "
-            "Address the logic gap immediately. "
-            "Always end with one sharp conceptual question that is specifically calibrated "
-            "to the student's chosen difficulty level."
+            "Address the logic gap immediately."
         )
 
-        # Sequential Coaching Logic with Enhanced Navigation
         if st.session_state.missed_questions_queue:
             count = len(st.session_state.missed_questions_queue)
             st.info(f"💡 Logic Gaps Remaining: **{count}**")
@@ -201,30 +241,16 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
             current_gap = st.session_state.missed_questions_queue[0]
             curr_diff = current_gap.get("difficulty", "Foundational")
             
-            with st.expander("👉 Guidelines: How to proceed", expanded=True):
-                st.write("1. Click the button below to start coaching on the next missed logic gap.")
-                st.write("2. Use the chat box at the bottom if you want to dive deeper into the current gap.")
-                st.write("3. Once a gap is addressed, you can move to the next one.")
-
             if st.button(f"🚀 Coach me on: {current_gap['question'][:60]}..."):
-                gap_prompt = (
-                    f"{socratic_system_prompt}\n\n"
-                    f"Difficulty Context: {curr_diff}\n"
-                    f"Question Missed: {current_gap['question']}\n\n"
-                    "Provide a very brief explanation and one follow-up question at the "
-                    f"{curr_diff} level."
-                )
+                gap_prompt = f"{socratic_system_prompt}\nDifficulty: {curr_diff}\nQuestion Missed: {current_gap['question']}"
                 st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
                 st.session_state.missed_questions_queue.pop(0)
                 st.rerun()
-        else:
-            st.success("🌟 All missed logic gaps have been reviewed!")
 
-        # Display Chat History
         for msg in st.session_state[chat_key]:
             st.chat_message(msg["role"]).write(msg["content"])
         
-        if prompt := st.chat_input("Ask Radar... (or continue current logic gap)"):
+        if prompt := st.chat_input("Ask Radar..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
             full_prompt = f"{socratic_system_prompt}\nDifficulty: {difficulty}\nCourse: {selected_course}\nUser: {prompt}"
             response = model.generate_content(full_prompt)
@@ -235,6 +261,5 @@ else:
     st.title(selected_course)
     st.warning("🚀 This course is launching soon!")
 
-# --- FOOTER ---
 st.markdown("---") 
-st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p><p style='color: #444; font-style: italic; font-weight: 500; font-size: 1.1em;'>\"Detecting Gaps, Delivering Grades\"</p></div>", unsafe_allow_html=True)
+st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p></div>", unsafe_allow_html=True)
