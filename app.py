@@ -3,48 +3,111 @@ import google.generativeai as genai
 import json
 import pdfplumber
 import io
+import sqlite3
+import hashlib
 from fpdf import FPDF 
 
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel('gemini-2.5-flash')
 
-# --- AUTHENTICATION SYSTEM ---
-def login_page():
-    st.title("🔐 Radar Grad-Tutors: Login")
-    st.markdown("---")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if username == "student" and password == "radar2026": # Demo credentials
-                st.session_state.logged_in = True
-                st.session_state.user_name = username
-                st.rerun()
-            else:
-                st.error("Invalid credentials.")
+# --- DATABASE SETUP ---
+def init_db():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users 
+                 (username TEXT PRIMARY KEY, password TEXT)''')
+    conn.commit()
+    conn.close()
 
-    with col2:
-        if st.button("🔴 Continue with Google"):
-            # Simulation: In a production app, you'd use streamlit-google-auth here
-            st.session_state.logged_in = True
-            st.session_state.user_name = "Google_User"
-            st.rerun()
-        if st.button("🔵 Continue with LinkedIn"):
-            st.session_state.logged_in = True
-            st.session_state.user_name = "LinkedIn_User"
-            st.rerun()
+def make_hashes(password):
+    return hashlib.sha256(str.encode(password)).hexdigest()
+
+def check_hashes(password, hashed_text):
+    if make_hashes(password) == hashed_text:
+        return hashed_text
+    return False
+
+def add_user(username, password):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    try:
+        c.execute('INSERT INTO users(username, password) VALUES (?,?)', (username, make_hashes(password)))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+def login_user(username, password):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('SELECT password FROM users WHERE username =?', (username,))
+    data = c.fetchone()
+    conn.close()
+    if data:
+        return check_hashes(password, data[0])
+    return False
+
+# Initialize the database on startup
+init_db()
+
+# --- AUTHENTICATION SYSTEM ---
+def auth_page():
+    st.title("🔐 Radar Grad-Tutors")
+    auth_mode = st.tabs(["Login", "Register"])
+    
+    with auth_mode[0]:
+        st.subheader("Welcome Back")
+        col1, col2 = st.columns(2)
+        with col1:
+            user = st.text_input("Username", key="login_user")
+            pw = st.text_input("Password", type="password", key="login_pw")
+            if st.button("Login"):
+                if login_user(user, pw):
+                    st.session_state.logged_in = True
+                    st.session_state.user_name = user
+                    st.success(f"Logged in as {user}")
+                    st.rerun()
+                else:
+                    st.error("Invalid Username or Password")
+        
+        with col2:
+            st.write("--- or ---")
+            if st.button("🔴 Continue with Google"):
+                st.session_state.logged_in = True
+                st.session_state.user_name = "Google_User"
+                st.rerun()
+            if st.button("🔵 Continue with LinkedIn"):
+                st.session_state.logged_in = True
+                st.session_state.user_name = "LinkedIn_User"
+                st.rerun()
+
+    with auth_mode[1]:
+        st.subheader("Create New Account")
+        new_user = st.text_input("Choose Username")
+        new_pw = st.text_input("Choose Password", type="password")
+        confirm_pw = st.text_input("Confirm Password", type="password")
+        
+        if st.button("Register"):
+            if new_pw != confirm_pw:
+                st.error("Passwords do not match")
+            elif len(new_pw) < 4:
+                st.error("Password too short")
+            else:
+                if add_user(new_user, new_pw):
+                    st.success("Account created successfully! Please go to the Login tab.")
+                else:
+                    st.error("Username already exists")
 
 # --- AUTH INITIALIZATION ---
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
-    login_page()
-    st.stop() # Stops the rest of the app from running until logged in
+    auth_page()
+    st.stop()
 
 # --- HELPERS ---
 def extract_text_from_pdf(uploaded_file):
@@ -72,7 +135,7 @@ def create_pdf_report(course, score, difficulty, percent):
 
 # 2. SIDEBAR
 st.sidebar.title("Radar Grad-Tutors")
-st.sidebar.write(f"Welcome, **{st.session_state.user_name}**!")
+st.sidebar.write(f"Logged in: **{st.session_state.user_name}**")
 if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.rerun()
@@ -108,7 +171,6 @@ if st.session_state.last_selected_course != selected_course:
     st.session_state.missed_questions_queue = []
 
 selected_module = "General Module"
-active_unit_context = "" 
 
 # --- BASIC TIER CURRICULUM ---
 if access_mode == "Basic (Pre-built)":
@@ -148,11 +210,8 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         difficulty = st.select_slider("Difficulty:", options=["Foundational", "Intermediate", "Advanced"])
 
         if st.button("🚀 Generate New 7-Question Set"):
-            with st.spinner("Drafting...will be ready in seconds!"):
-                json_prompt = f"""Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. 
-                Return ONLY a raw JSON list of objects. No markdown formatting. No backticks. 
-                Keys: "question", "options" (list of strings), "answer" (string), "explanation" (string)."""
-                
+            with st.spinner("Drafting..."):
+                json_prompt = f"Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. Return ONLY raw JSON list. Keys: 'question', 'options', 'answer', 'explanation'."
                 response = model.generate_content(json_prompt)
                 raw_text = response.text.replace("```json", "").replace("```", "").strip()
                 try:
@@ -160,15 +219,14 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                     st.session_state.current_idx, st.session_state.score = 0, 0
                     st.session_state.quiz_complete, st.session_state.answered, st.session_state.snow_triggered = False, False, False
                     st.rerun()
-                except Exception as e:
-                    st.error("The AI generated a formatting error. Please try generating the set again.")
+                except:
+                    st.error("Error generating quiz. Please try again.")
 
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
             idx = st.session_state.current_idx
             q_data = st.session_state.quiz_set[idx]
             st.markdown(f"### Question {idx + 1} of 7")
-            st.info(f"**{q_data.get('question', 'Loading question...')}**")
-            
+            st.info(f"**{q_data.get('question', '')}**")
             user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{idx}")
 
             if not st.session_state.answered and st.button("Check Answer"):
@@ -183,11 +241,7 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                         st.session_state[f"scored_{idx}"] = True
                 else:
                     st.error(f"❌ Incorrect. The correct answer was: {q_data['answer']}")
-                    missed_item = {
-                        "course": selected_course, 
-                        "question": q_data["question"],
-                        "difficulty": difficulty
-                    }
+                    missed_item = {"course": selected_course, "question": q_data["question"], "difficulty": difficulty}
                     if missed_item not in st.session_state.missed_questions_queue:
                         st.session_state.missed_questions_queue.append(missed_item)
 
@@ -201,45 +255,31 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
 
         elif st.session_state.quiz_complete:
             percent = int((st.session_state.score / 7) * 100)
-            st.markdown("---")
-            st.subheader("🏁 Performance Scorecard")
-            st.metric("Final Accuracy", f"{percent}%")
-            
+            st.subheader(f"🏁 Final Score: {percent}%")
             if percent >= 70: 
-                st.success("📈 GREAT JOB! Assessment passed.")
+                st.success("Assessment passed!")
                 if not st.session_state.snow_triggered:
                     st.snow()
                     st.session_state.snow_triggered = True
-            else: 
-                st.warning("⚠️ ROOM FOR GROWTH: Review your failed concepts in the Socratic Tutor.")
             
             pdf_data = create_pdf_report(selected_course, st.session_state.score, difficulty, percent)
-            st.download_button("📥 Download PDF Report", data=pdf_data, file_name=f"Radar_Report.pdf", mime="application/pdf")
-            
+            st.download_button("📥 Download Report", data=pdf_data, file_name=f"Report.pdf", mime="application/pdf")
             if st.button("🔄 Restart Quiz"):
                 st.session_state.quiz_set = []
                 st.session_state.quiz_complete = False
                 st.rerun()
 
     with tab3:
-        st.subheader(f"🎓 Socratic Mentor: {selected_course}")
+        st.subheader(f"🎓 Socratic Mentor")
         chat_key = f"messages_{selected_course}"
         if chat_key not in st.session_state: st.session_state[chat_key] = []
 
-        socratic_system_prompt = (
-            "You are a brilliant academic mentor. Be as brief and concise as possible. "
-            "Address the logic gap immediately."
-        )
-
         if st.session_state.missed_questions_queue:
             count = len(st.session_state.missed_questions_queue)
-            st.info(f"💡 Logic Gaps Remaining: **{count}**")
-            
+            st.info(f"💡 Logic Gaps Remaining: {count}")
             current_gap = st.session_state.missed_questions_queue[0]
-            curr_diff = current_gap.get("difficulty", "Foundational")
-            
-            if st.button(f"🚀 Coach me on: {current_gap['question'][:60]}..."):
-                gap_prompt = f"{socratic_system_prompt}\nDifficulty: {curr_diff}\nQuestion Missed: {current_gap['question']}"
+            if st.button(f"🚀 Coach me on current gap"):
+                gap_prompt = f"Explain the logic briefly for this missed question: {current_gap['question']}"
                 st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
                 st.session_state.missed_questions_queue.pop(0)
                 st.rerun()
@@ -249,15 +289,11 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
         
         if prompt := st.chat_input("Ask Radar..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
-            full_prompt = f"{socratic_system_prompt}\nDifficulty: {difficulty}\nCourse: {selected_course}\nUser: {prompt}"
-            response = model.generate_content(full_prompt)
+            response = model.generate_content(prompt)
             st.session_state[chat_key].append({"role": "assistant", "content": response.text})
             st.rerun()
-
 else:
-    st.title(selected_course)
     st.warning("🚀 This course is launching soon!")
 
 st.markdown("---") 
-st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p></div>", unsafe_allow_html=True)
-
+st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors</p></div>", unsafe_allow_html=True)
