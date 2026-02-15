@@ -15,18 +15,18 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
+    # Users table
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (username TEXT PRIMARY KEY, password TEXT)''')
+    # Enrollments table: Links users to courses
+    c.execute('''CREATE TABLE IF NOT EXISTS enrollments 
+                 (username TEXT, course_name TEXT, 
+                  PRIMARY KEY (username, course_name))''')
     conn.commit()
     conn.close()
 
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return hashed_text
-    return False
 
 def add_user(username, password):
     conn = sqlite3.connect('users.db')
@@ -35,10 +35,8 @@ def add_user(username, password):
         c.execute('INSERT INTO users(username, password) VALUES (?,?)', (username, make_hashes(password)))
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
+    except sqlite3.IntegrityError: return False
+    finally: conn.close()
 
 def login_user(username, password):
     conn = sqlite3.connect('users.db')
@@ -46,11 +44,28 @@ def login_user(username, password):
     c.execute('SELECT password FROM users WHERE username =?', (username,))
     data = c.fetchone()
     conn.close()
-    if data:
-        return check_hashes(password, data[0])
+    if data and data[0] == make_hashes(password): return True
     return False
 
-# Initialize the database on startup
+# --- ENROLLMENT LOGIC ---
+def enroll_user_in_course(username, course_name):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    try:
+        c.execute('INSERT INTO enrollments(username, course_name) VALUES (?,?)', (username, course_name))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError: return False
+    finally: conn.close()
+
+def get_user_courses(username):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute('SELECT course_name FROM enrollments WHERE username = ?', (username,))
+    data = c.fetchall()
+    conn.close()
+    return [item[0] for item in data]
+
 init_db()
 
 # --- AUTHENTICATION SYSTEM ---
@@ -60,97 +75,56 @@ def auth_page():
     
     with auth_mode[0]:
         st.subheader("Welcome Back")
-        col1, col2 = st.columns(2)
-        with col1:
-            user = st.text_input("Username", key="login_user")
-            pw = st.text_input("Password", type="password", key="login_pw")
-            if st.button("Login"):
-                if login_user(user, pw):
-                    st.session_state.logged_in = True
-                    st.session_state.user_name = user
-                    st.success(f"Logged in as {user}")
-                    st.rerun()
-                else:
-                    st.error("Invalid Username or Password")
-        
-        with col2:
-            st.write("--- or ---")
-            if st.button("🔴 Continue with Google"):
+        user = st.text_input("Username", key="login_user")
+        pw = st.text_input("Password", type="password", key="login_pw")
+        if st.button("Login"):
+            if login_user(user, pw):
                 st.session_state.logged_in = True
-                st.session_state.user_name = "Google_User"
+                st.session_state.user_name = user
                 st.rerun()
-            if st.button("🔵 Continue with LinkedIn"):
-                st.session_state.logged_in = True
-                st.session_state.user_name = "LinkedIn_User"
-                st.rerun()
+            else: st.error("Invalid Username or Password")
 
     with auth_mode[1]:
         st.subheader("Create New Account")
         new_user = st.text_input("Choose Username")
         new_pw = st.text_input("Choose Password", type="password")
-        confirm_pw = st.text_input("Confirm Password", type="password")
-        
         if st.button("Register"):
-            if new_pw != confirm_pw:
-                st.error("Passwords do not match")
-            elif len(new_pw) < 4:
-                st.error("Password too short")
-            else:
-                if add_user(new_user, new_pw):
-                    st.success("Account created successfully! Please go to the Login tab.")
-                else:
-                    st.error("Username already exists")
+            if add_user(new_user, new_pw):
+                st.success("Account created! Please log in.")
+            else: st.error("Username already exists")
 
-# --- AUTH INITIALIZATION ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if not st.session_state.logged_in:
     auth_page()
     st.stop()
 
-# --- HELPERS ---
-def extract_text_from_pdf(uploaded_file):
-    with pdfplumber.open(io.BytesIO(uploaded_file.read())) as pdf:
-        text = ""
-        for page in pdf.pages:
-            text += (page.extract_text() or "") + "\n"
-    return text
-
-def create_pdf_report(course, score, difficulty, percent):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, "Radar Grad-Tutors: Performance Report", ln=True, align='C')
-    pdf.ln(10)
-    pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, f"Course: {course}", ln=True)
-    pdf.cell(200, 10, f"Difficulty Level: {difficulty}", ln=True)
-    pdf.cell(200, 10, f"Score: {score} out of 7", ln=True)
-    pdf.cell(200, 10, f"Accuracy: {percent}%", ln=True)
-    pdf.ln(10)
-    pdf.set_font("Arial", 'I', 10)
-    pdf.cell(200, 10, "Detecting Gaps, Delivering Grades.", ln=True, align='C')
-    return pdf.output(dest='S').encode('latin-1')
-
-# 2. SIDEBAR
-st.sidebar.title("Radar Grad-Tutors")
-st.sidebar.write(f"Logged in: **{st.session_state.user_name}**")
-if st.sidebar.button("Logout"):
-    st.session_state.logged_in = False
-    st.rerun()
-
-access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
-
-course_list = [
+# --- APP MASTER DATA ---
+all_available_courses = [
     "College Algebra", "Elementary Calculus", "Elementary Microeconomics", 
     "Elementary Macroeconomics", "Mathematics for Economists",
     "Statistics for Social Scientist", "Intermediate Microeconomics", 
     "Intermediate Macroeconomics", "Econometrics 1", "Econometrics 2"
 ]
-selected_course = st.sidebar.selectbox("Choose a Course:", course_list)
 
-# --- SESSION STATE ---
+# --- SIDEBAR & COURSE FILTERING ---
+st.sidebar.title("Radar Grad-Tutors")
+st.sidebar.write(f"User: **{st.session_state.user_name}**")
+if st.sidebar.button("Logout"):
+    st.session_state.logged_in = False
+    st.rerun()
+
+# Get only courses this specific user has enrolled in
+user_enrolled_courses = get_user_courses(st.session_state.user_name)
+
+if not user_enrolled_courses:
+    st.warning("You are not enrolled in any courses yet. Go to the 'Enrollment' tab to add one.")
+    selected_course = None
+else:
+    selected_course = st.sidebar.selectbox("Your Active Courses:", user_enrolled_courses)
+
+access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
+
+# --- SESSION STATE MANAGEMENT ---
 if "quiz_set" not in st.session_state: st.session_state.quiz_set = []
 if "current_idx" not in st.session_state: st.session_state.current_idx = 0
 if "score" not in st.session_state: st.session_state.score = 0
@@ -170,45 +144,37 @@ if st.session_state.last_selected_course != selected_course:
     st.session_state.last_selected_course = selected_course
     st.session_state.missed_questions_queue = []
 
-selected_module = "General Module"
+# --- MAIN INTERFACE ---
+tab_lesson, tab_exam, tab_socratic, tab_enroll = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor", "💳 Enrollment"])
 
-# --- BASIC TIER CURRICULUM ---
-if access_mode == "Basic (Pre-built)":
-    if selected_course == "Elementary Calculus":
-        modules = ["Unit 1: Limits & Continuity", "Unit 2: Derivatives", "Unit 3: Integration"]
-        selected_module = st.sidebar.radio("Course Curriculum:", modules)
-    elif selected_course == "Elementary Macroeconomics":
-        modules = ["Unit 1: GDP & Growth", "Unit 2: Inflation", "Unit 3: Fiscal Policy"]
-        selected_module = st.sidebar.radio("Course Curriculum:", modules)
-    elif selected_course == "Intermediate Macroeconomics":
-        modules = ["Unit 1: IS-LM Models", "Unit 2: Aggregate Supply", "Unit 3: Open Economy Macro"]
-        selected_module = st.sidebar.radio("Course Curriculum:", modules)
-    elif selected_course == "Statistics for Social Scientist":
-        modules = ["Unit 1: Probability", "Unit 2: Distributions", "Unit 3: Hypothesis Testing"]
-        selected_module = st.sidebar.radio("Course Curriculum:", modules)
-    elif selected_course == "Econometrics 2":
-        modules = ["Unit 1: Time Series", "Unit 2: Panel Data", "Unit 3: Limited Dependent Variables"]
-        selected_module = st.sidebar.radio("Course Curriculum:", modules)
+with tab_enroll:
+    st.subheader("Manage Your Subscriptions")
+    st.info("Select a course to add to your personal learning hall.")
+    course_to_add = st.selectbox("Select Course to Enroll:", [c for c in all_available_courses if c not in user_enrolled_courses])
+    if st.button("✅ Confirm Enrollment"):
+        if enroll_user_in_course(st.session_state.user_name, course_to_add):
+            st.success(f"Successfully enrolled in {course_to_add}!")
+            st.rerun()
+        else:
+            st.error("Enrollment failed.")
 
-# --- MAIN ROUTING ---
-active_courses = ["Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2"]
+# --- COURSE CONTENT LOGIC (Only runs if a course is selected) ---
+if selected_course:
+    # Logic for Units
+    selected_module = "General Module"
+    if access_mode == "Basic (Pre-built)":
+        if selected_course == "Elementary Calculus":
+            modules = ["Unit 1: Limits & Continuity", "Unit 2: Derivatives", "Unit 3: Integration"]
+            selected_module = st.sidebar.radio("Course Curriculum:", modules)
+        # ... (Additional module logic for other courses can go here)
 
-if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
-    st.title(f"{selected_course if access_mode == 'Basic (Pre-built)' else 'Custom Radar Vault'}")
-    tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
+    with tab_lesson:
+        st.title(f"Lesson: {selected_course}")
+        st.video("https://youtu.be/REEAJ_T8v7U" if "Calculus" in selected_course else "https://youtu.be/i_bn4E9EK_Q")
 
-    with tab1:
-        if access_mode == "Basic (Pre-built)":
-            st.video("https://youtu.be/REEAJ_T8v7U" if "Calculus" in selected_course else "https://youtu.be/i_bn4E9EK_Q")
-        elif access_mode == "Premium (Custom Radar)":
-            syllabus_file = st.sidebar.file_uploader("📂 Course Outline", type=["pdf"], key="syllabus_up")
-            if syllabus_file and st.button("✨ Generate Unit Digest"):
-                st.info("Mapping curriculum from uploaded file...")
-
-    with tab2:
-        st.subheader("📝 Adaptive Exam Hall")
+    with tab_exam:
+        st.subheader(f"Exam Hall: {selected_course}")
         difficulty = st.select_slider("Difficulty:", options=["Foundational", "Intermediate", "Advanced"])
-
         if st.button("🚀 Generate New 7-Question Set"):
             with st.spinner("Drafting..."):
                 json_prompt = f"Generate 7 MCQs for {selected_course} on {selected_module} at {difficulty} level. Return ONLY raw JSON list. Keys: 'question', 'options', 'answer', 'explanation'."
@@ -219,81 +185,41 @@ if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
                     st.session_state.current_idx, st.session_state.score = 0, 0
                     st.session_state.quiz_complete, st.session_state.answered, st.session_state.snow_triggered = False, False, False
                     st.rerun()
-                except:
-                    st.error("Error generating quiz. Please try again.")
+                except: st.error("AI Formatting error. Try again.")
 
         if st.session_state.quiz_set and not st.session_state.quiz_complete:
             idx = st.session_state.current_idx
             q_data = st.session_state.quiz_set[idx]
-            st.markdown(f"### Question {idx + 1} of 7")
-            st.info(f"**{q_data.get('question', '')}**")
-            user_choice = st.radio("Select your answer:", q_data["options"], key=f"q_{idx}")
-
+            st.info(f"**Q{idx+1}: {q_data.get('question', '')}**")
+            user_choice = st.radio("Answer:", q_data["options"], key=f"q_{idx}")
             if not st.session_state.answered and st.button("Check Answer"):
                 st.session_state.answered = True
                 st.rerun()
-            
             if st.session_state.answered:
-                if str(user_choice).strip().lower() == str(q_data["answer"]).strip().lower():
-                    st.success(f"✅ Correct! {q_data.get('explanation', '')}")
-                    if f"scored_{idx}" not in st.session_state:
+                if str(user_choice).lower() == str(q_data["answer"]).lower():
+                    st.success("Correct!")
+                    if f"sc_{idx}" not in st.session_state:
                         st.session_state.score += 1
-                        st.session_state[f"scored_{idx}"] = True
+                        st.session_state[f"sc_{idx}"] = True
                 else:
-                    st.error(f"❌ Incorrect. The correct answer was: {q_data['answer']}")
-                    missed_item = {"course": selected_course, "question": q_data["question"], "difficulty": difficulty}
-                    if missed_item not in st.session_state.missed_questions_queue:
-                        st.session_state.missed_questions_queue.append(missed_item)
-
-                if st.button("Next Question ➡️"):
-                    if st.session_state.current_idx < (len(st.session_state.quiz_set) - 1):
-                        st.session_state.current_idx += 1
-                        st.session_state.answered = False
-                    else: 
-                        st.session_state.quiz_complete = True
+                    st.error(f"Incorrect. Answer: {q_data['answer']}")
+                    st.session_state.missed_questions_queue.append({"question": q_data["question"]})
+                if st.button("Next ➡️"):
+                    if st.session_state.current_idx < 6: st.session_state.current_idx += 1
+                    else: st.session_state.quiz_complete = True
+                    st.session_state.answered = False
                     st.rerun()
 
-        elif st.session_state.quiz_complete:
-            percent = int((st.session_state.score / 7) * 100)
-            st.subheader(f"🏁 Final Score: {percent}%")
-            if percent >= 70: 
-                st.success("Assessment passed!")
-                if not st.session_state.snow_triggered:
-                    st.snow()
-                    st.session_state.snow_triggered = True
-            
-            pdf_data = create_pdf_report(selected_course, st.session_state.score, difficulty, percent)
-            st.download_button("📥 Download Report", data=pdf_data, file_name=f"Report.pdf", mime="application/pdf")
-            if st.button("🔄 Restart Quiz"):
-                st.session_state.quiz_set = []
-                st.session_state.quiz_complete = False
-                st.rerun()
-
-    with tab3:
-        st.subheader(f"🎓 Socratic Mentor")
-        chat_key = f"messages_{selected_course}"
+    with tab_socratic:
+        st.subheader("Socratic Mentor")
+        chat_key = f"msgs_{selected_course}"
         if chat_key not in st.session_state: st.session_state[chat_key] = []
-
-        if st.session_state.missed_questions_queue:
-            count = len(st.session_state.missed_questions_queue)
-            st.info(f"💡 Logic Gaps Remaining: {count}")
-            current_gap = st.session_state.missed_questions_queue[0]
-            if st.button(f"🚀 Coach me on current gap"):
-                gap_prompt = f"Explain the logic briefly for this missed question: {current_gap['question']}"
-                st.session_state[chat_key].append({"role": "assistant", "content": model.generate_content(gap_prompt).text})
-                st.session_state.missed_questions_queue.pop(0)
-                st.rerun()
-
-        for msg in st.session_state[chat_key]:
-            st.chat_message(msg["role"]).write(msg["content"])
-        
-        if prompt := st.chat_input("Ask Radar..."):
+        for msg in st.session_state[chat_key]: st.chat_message(msg["role"]).write(msg["content"])
+        if prompt := st.chat_input("Ask about your course..."):
             st.session_state[chat_key].append({"role": "user", "content": prompt})
-            response = model.generate_content(prompt)
-            st.session_state[chat_key].append({"role": "assistant", "content": response.text})
+            resp = model.generate_content(prompt).text
+            st.session_state[chat_key].append({"role": "assistant", "content": resp})
             st.rerun()
-else:
-    st.warning("🚀 This course is launching soon!")
 
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors</p></div>", unsafe_allow_html=True)
