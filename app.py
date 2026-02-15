@@ -17,7 +17,6 @@ def login_page():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Credential Login")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
         if st.button("Login"):
@@ -29,8 +28,6 @@ def login_page():
                 st.error("Invalid credentials.")
 
     with col2:
-        st.subheader("Social Login")
-        st.info("Quick access via verified accounts")
         if st.button("🔴 Continue with Google"):
             # Simulation: In a production app, you'd use streamlit-google-auth here
             st.session_state.logged_in = True
@@ -263,3 +260,4 @@ else:
 
 st.markdown("---") 
 st.markdown("<div style='text-align: center;'><p style='color: #666; font-size: 0.85em;'>© 2026 Radar Grad-Tutors | Precision Learning for Students</p></div>", unsafe_allow_html=True)
+
