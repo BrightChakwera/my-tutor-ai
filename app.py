@@ -3,7 +3,6 @@ import google.generativeai as genai
 import json
 import pdfplumber
 import io
-import google.generativeai as genai
 from fpdf import FPDF 
 
 # 1. SETUP: API Configuration
@@ -36,9 +35,9 @@ def create_pdf_report(course, score, difficulty, percent):
 
 # 2. SIDEBAR
 st.sidebar.title("Radar Grad-Tutors")
-st.sidebar.write("Logged in: **Student**")
 
-access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
+# Tier Selection - Updated names to Basic and Premium
+access_mode = st.sidebar.radio("Account Tier:", ["Basic", "Premium"])
 
 course_list = [
     "College Algebra", "Elementary Calculus", "Elementary Microeconomics", 
@@ -71,7 +70,7 @@ if st.session_state.last_selected_course != selected_course:
 selected_module = "General Module"
 
 # --- BASIC TIER CURRICULUM ---
-if access_mode == "Basic (Pre-built)":
+if access_mode == "Basic":
     if selected_course == "Elementary Calculus":
         modules = ["Unit 1: Limits & Continuity", "Unit 2: Derivatives", "Unit 3: Integration"]
         selected_module = st.sidebar.radio("Course Curriculum:", modules)
@@ -89,16 +88,16 @@ if access_mode == "Basic (Pre-built)":
         selected_module = st.sidebar.radio("Course Curriculum:", modules)
 
 # --- MAIN ROUTING ---
-active_courses = ["College Algebra", "Elementary Calculus", "Elementary Microeconomics", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2"]
+active_courses = ["College Algebra", "Elementary Calculus", "Elementary Microeconomics", "Elementary Macroeconomics", "Mathematics for Economists", "Statistics for Social Scientist", "Intermediate Microeconomics", "Intermediate Macroeconomics", "Econometrics 1", "Econometrics 2"]
 
-if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
-    st.title(f"{selected_course if access_mode == 'Basic (Pre-built)' else 'Custom Radar Vault'}")
+if selected_course in active_courses or access_mode == "Premium":
+    st.title(f"{selected_course if access_mode == 'Basic' else 'Custom Radar Vault'}")
     tab1, tab2, tab3 = st.tabs(["📺 Lesson Hall", "📝 Exam Hall", "🎓 Socratic Tutor"])
 
     with tab1:
-        if access_mode == "Basic (Pre-built)":
+        if access_mode == "Basic":
             st.video("https://youtu.be/REEAJ_T8v7U" if "Calculus" in selected_course else "https://youtu.be/i_bn4E9EK_Q")
-        elif access_mode == "Premium (Custom Radar)":
+        elif access_mode == "Premium":
             syllabus_file = st.sidebar.file_uploader("📂 Course Outline", type=["pdf"], key="syllabus_up")
             if syllabus_file and st.button("✨ Generate Unit Digest"):
                 st.info("Mapping curriculum from uploaded file...")
