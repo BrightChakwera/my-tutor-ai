@@ -3,111 +3,12 @@ import google.generativeai as genai
 import json
 import pdfplumber
 import io
-import sqlite3
-import hashlib
+import google.generativeai as genai
 from fpdf import FPDF 
 
 # 1. SETUP: API Configuration
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 model = genai.GenerativeModel('gemini-2.5-flash')
-
-# --- DATABASE SETUP ---
-def init_db():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users 
-                 (username TEXT PRIMARY KEY, password TEXT)''')
-    conn.commit()
-    conn.close()
-
-def make_hashes(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_hashes(password, hashed_text):
-    if make_hashes(password) == hashed_text:
-        return hashed_text
-    return False
-
-def add_user(username, password):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    try:
-        c.execute('INSERT INTO users(username, password) VALUES (?,?)', (username, make_hashes(password)))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-    finally:
-        conn.close()
-
-def login_user(username, password):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('SELECT password FROM users WHERE username =?', (username,))
-    data = c.fetchone()
-    conn.close()
-    if data:
-        return check_hashes(password, data[0])
-    return False
-
-# Initialize the database on startup
-init_db()
-
-# --- AUTHENTICATION SYSTEM ---
-def auth_page():
-    st.title("🔐 Radar Grad-Tutors")
-    auth_mode = st.tabs(["Login", "Register"])
-    
-    with auth_mode[0]:
-        st.subheader("Welcome Back")
-        col1, col2 = st.columns(2)
-        with col1:
-            user = st.text_input("Username", key="login_user")
-            pw = st.text_input("Password", type="password", key="login_pw")
-            if st.button("Login"):
-                if login_user(user, pw):
-                    st.session_state.logged_in = True
-                    st.session_state.user_name = user
-                    st.success(f"Logged in as {user}")
-                    st.rerun()
-                else:
-                    st.error("Invalid Username or Password")
-        
-        with col2:
-            st.write("--- or ---")
-            if st.button("🔴 Continue with Google"):
-                st.session_state.logged_in = True
-                st.session_state.user_name = "Google_User"
-                st.rerun()
-            if st.button("🔵 Continue with LinkedIn"):
-                st.session_state.logged_in = True
-                st.session_state.user_name = "LinkedIn_User"
-                st.rerun()
-
-    with auth_mode[1]:
-        st.subheader("Create New Account")
-        new_user = st.text_input("Choose Username")
-        new_pw = st.text_input("Choose Password", type="password")
-        confirm_pw = st.text_input("Confirm Password", type="password")
-        
-        if st.button("Register"):
-            if new_pw != confirm_pw:
-                st.error("Passwords do not match")
-            elif len(new_pw) < 4:
-                st.error("Password too short")
-            else:
-                if add_user(new_user, new_pw):
-                    st.success("Account created successfully! Please go to the Login tab.")
-                else:
-                    st.error("Username already exists")
-
-# --- AUTH INITIALIZATION ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if not st.session_state.logged_in:
-    auth_page()
-    st.stop()
 
 # --- HELPERS ---
 def extract_text_from_pdf(uploaded_file):
@@ -135,10 +36,7 @@ def create_pdf_report(course, score, difficulty, percent):
 
 # 2. SIDEBAR
 st.sidebar.title("Radar Grad-Tutors")
-st.sidebar.write(f"Logged in: **{st.session_state.user_name}**")
-if st.sidebar.button("Logout"):
-    st.session_state.logged_in = False
-    st.rerun()
+st.sidebar.write("Logged in: **Student**")
 
 access_mode = st.sidebar.radio("Account Tier:", ["Basic (Pre-built)", "Premium (Custom Radar)"])
 
@@ -191,7 +89,7 @@ if access_mode == "Basic (Pre-built)":
         selected_module = st.sidebar.radio("Course Curriculum:", modules)
 
 # --- MAIN ROUTING ---
-active_courses = ["Elementary Calculus", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2"]
+active_courses = ["College Algebra", "Elementary Calculus", "Elementary Microeconomics", "Elementary Macroeconomics", "Intermediate Macroeconomics", "Statistics for Social Scientist", "Econometrics 2"]
 
 if selected_course in active_courses or access_mode == "Premium (Custom Radar)":
     st.title(f"{selected_course if access_mode == 'Basic (Pre-built)' else 'Custom Radar Vault'}")
